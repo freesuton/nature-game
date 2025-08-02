@@ -4,6 +4,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private moveSpeed: number = 160;
   private jumpForce: number = -330;
   public body!: Phaser.Physics.Arcade.Body;
+  public facingDirection: number = 1; // 1 for right, -1 for left
 
   constructor(scene: Scene, x: number, y: number) {
     super(scene, x, y, 'player');
@@ -42,12 +43,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   moveLeft() {
     this.setVelocityX(-this.moveSpeed);
     this.anims.play('left', true);
+    this.facingDirection = -1;
     console.log('Moving left, velocity:', this.body.velocity.x);
   }
 
   moveRight() {
     this.setVelocityX(this.moveSpeed);
     this.anims.play('right', true);
+    this.facingDirection = 1;
     console.log('Moving right, velocity:', this.body.velocity.x);
   }
 
@@ -59,5 +62,14 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   jump() {
     this.setVelocityY(this.jumpForce);
     console.log('Jumping, velocity Y:', this.body.velocity.y);
+  }
+
+  getBulletSpawnPosition() {
+    // Return position slightly in front of player
+    const offsetX = this.facingDirection * 20;
+    return {
+      x: this.x + offsetX,
+      y: this.y - 5 // Slightly above center
+    };
   }
 }
