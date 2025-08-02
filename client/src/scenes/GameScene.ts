@@ -80,9 +80,9 @@ export class GameScene extends Scene {
       this.player.stop();
     }
 
-    // Handle jumping - check if player is on ground orwad platform
+    // Handle jumping - check if player is on ground or platform
     const onGround = this.player.body && (this.player.body.touching.down || this.player.body.blocked.down);
-    if (this.cursors.up.isDown && onGround) {
+    if (Phaser.Input.Keyboard.JustDown(this.cursors.up) && onGround) {
       this.player.jump();
     }
 
@@ -99,7 +99,7 @@ export class GameScene extends Scene {
       this.player.moveRight();
     }
     
-    if (wasd.W.isDown && onGround) {
+    if (Phaser.Input.Keyboard.JustDown(wasd.W) && onGround) {
       this.player.jump();
     }
 

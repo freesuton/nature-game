@@ -3,7 +3,7 @@ import { Scene } from 'phaser';
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private moveSpeed: number = 160;
   private jumpForce: number = -330;
-  public body!: Phaser.Physics.Arcade.Body;
+  declare body: Phaser.Physics.Arcade.Body;
   public facingDirection: number = 1; // 1 for right, -1 for left
 
   constructor(scene: Scene, x: number, y: number) {
@@ -15,7 +15,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // Set up physics properties
     this.setCollideWorldBounds(true);
-    this.setBounce(0.2);
+    this.setBounce(0);
     this.setDragX(500); // Add some drag for better control
 
     // Create animations
@@ -54,9 +54,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     console.log('Moving right, velocity:', this.body.velocity.x);
   }
 
-  stop() {
+  stop(): this {
     this.setVelocityX(0);
     this.anims.play('turn');
+    return this;
   }
 
   jump() {
