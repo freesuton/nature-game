@@ -1,4 +1,5 @@
 import { Types } from 'phaser';
+import { MenuScene } from '../scenes/MenuScene';
 import { GameScene } from '../scenes/GameScene';
 
 export const GameConfig: Types.Core.GameConfig = {
@@ -14,9 +15,9 @@ export const GameConfig: Types.Core.GameConfig = {
   physics: {
     default: 'arcade',
     arcade: {
-      gravity: { y: 300 },
+      gravity: { x: 0, y: 300 },
       debug: true // Set to false in production
     }
   },
-  scene: [GameScene]
+  scene: [MenuScene, GameScene]
 };
