@@ -138,16 +138,19 @@ export class GameRoom extends Room<GameState> {
           const dx = Math.abs(bullet.x - player.x);
           const dy = Math.abs(bullet.y - player.y);
           if (dx < 20 && dy < 30) { // Simple box collision
-            // Hit! Remove bullet and reset player
+            // Hit! Remove bullet and remove player
             this.bullets.delete(bulletId);
             this.broadcast("bulletDestroy", { id: bulletId });
             
-            // Reset hit player
-            player.x = 100;
-            player.y = 450;
-            player.velocityX = 0;
-            player.velocityY = 0;
-            player.onGround = true;
+            // Notify player death
+            this.broadcast("playerDeath", { 
+              playerId: playerId,
+              killedBy: bullet.ownerId 
+            });
+            
+            // Remove the player from the game
+            this.state.players.delete(playerId);
+            console.log(`Player ${playerId} was killed by ${bullet.ownerId}`);
           }
         }
       });
