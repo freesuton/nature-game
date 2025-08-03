@@ -14,6 +14,7 @@ export class GameRoom extends Room<GameState> {
       const player = this.state.players.get(client.sessionId);
       if (!player) return;
 
+      console.log(`Player ${client.sessionId} moved:`, data);
       player.x = data.x;
       player.y = data.y;
       player.facingDirection = data.facingDirection;

@@ -1,17 +1,19 @@
 import { Scene } from 'phaser';
 import { Client, Room } from 'colyseus.js';
 import { Player } from '../sprites/Player';
+import { GameLogic, GameState } from '../utils/GameLogic';
 
 interface OtherPlayer extends Player {
   sessionId: string;
+  targetX: number;
+  targetY: number;
+  smoothX: number;
+  smoothY: number;
 }
 
 export class MultiplayerGameScene extends Scene {
-  private player!: Player;
+  private gameState!: GameState;
   private otherPlayers: Map<string, OtherPlayer> = new Map();
-  private platforms!: Phaser.Physics.Arcade.StaticGroup;
-  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-  private shootKey!: Phaser.Input.Keyboard.Key;
   private room?: Room;
   private client?: Client;
 
@@ -20,70 +22,61 @@ export class MultiplayerGameScene extends Scene {
   }
 
   preload() {
-    // Load game assets
-    this.load.image('ground', 'https://labs.phaser.io/assets/sprites/platform.png');
-    this.load.spritesheet('player', 
-      'https://labs.phaser.io/assets/sprites/dude.png',
-      { frameWidth: 32, frameHeight: 48 }
-    );
-    this.load.image('bullet', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAFYSURBVBiVY/z//z8DJQAggJiYmBgZGRkZGBgYGFatWsVAKQAQQIxMTEwMf//+Zfjx4wfD379/GX7//s3w+/dvBkoAQAAxMjIyMvz584fh27dvDJ8/f2b48uULw5cvXxi+fv3K8P37dwZKAUAAYmRkZGT4+fMnw6dPnxg+fvzI8OHDB4b379+zf/nyhYFSABBAjIyMjAw/fvxg+PDhA8O7d+8Y3r59y/DmzRuG169fM7x69Yrh5cuXDJQCgABiZGRkZPjy5QvDy5cvGV68eMHw/PlzhqdPnzI8efKE4fHjxwyPHj1iePjwIQOlACCAGBkZGRmePXvG8OjRI4aHDx8yPHjwgOH+/fsM9+7dY7h79y7DnTt3GO7cucNAKQAIIEZGRkaGO3fuMNy5c4fh9u3bDLdu3WK4efMmw40bNxiuX7/OcO3aNYZr164xUAoAAoiRkZGR4dq1awzXrl1juHr1KsPVq1cZrly5wnD58mWGy5cvM1y6dImBUgAQQABxoK9zYQQAAAABJRU5ErkJggg==');
+    GameLogic.preloadAssets(this);
   }
 
   async create() {
-    // Create platforms
-    this.platforms = this.physics.add.staticGroup();
-    
-    // Create ground
-    this.platforms.create(400, 568, 'ground').setScale(2).refreshBody();
-
-    // Create some platforms
-    this.platforms.create(600, 400, 'ground');
-    this.platforms.create(50, 250, 'ground');
-    this.platforms.create(750, 220, 'ground');
-
-    // Create player
-    this.player = new Player(this, 100, 450);
-
-    // Set up keyboard input
-    this.cursors = this.input.keyboard!.createCursorKeys();
-    this.shootKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J);
+    // Create base game world using shared logic
+    this.gameState = GameLogic.createWorld(this);
 
     // Connect to Colyseus server
     try {
-      this.client = new Client('ws://localhost:2567');
+      // Use environment variable or fallback for server URL
+      const serverUrl = 'ws://192.168.0.222:2567';
+      console.log('Attempting to connect to server at:', serverUrl);
+      
+      this.client = new Client(serverUrl);
+      
+      console.log('Client created, attempting to join room...');
+      
       this.room = await this.client.joinOrCreate('game');
+      console.log('Successfully joined room!');
       
       // Handle room state changes
-      this.room.state.players.onAdd((player, sessionId) => {
+      this.room.state.players.onAdd((player: any, sessionId: string) => {
         if (sessionId !== this.room?.sessionId) {
           const otherPlayer = new Player(this, player.x, player.y) as OtherPlayer;
           otherPlayer.sessionId = sessionId;
+          otherPlayer.targetX = player.x;
+          otherPlayer.targetY = player.y;
+          otherPlayer.smoothX = player.x;
+          otherPlayer.smoothY = player.y;
           this.otherPlayers.set(sessionId, otherPlayer);
+          this.physics.add.collider(otherPlayer, this.gameState.platforms);
+          
+          // Listen to changes on this specific player
+          player.onChange(() => {
+            const currentOtherPlayer = this.otherPlayers.get(sessionId);
+            if (currentOtherPlayer) {
+              // Set new target positions instead of directly setting position
+              currentOtherPlayer.targetX = player.x;
+              currentOtherPlayer.targetY = player.y;
+              currentOtherPlayer.facingDirection = player.facingDirection;
+              if (player.isMoving) {
+                currentOtherPlayer.anims.play(player.facingDirection > 0 ? 'right' : 'left', true);
+              } else {
+                currentOtherPlayer.anims.play('turn');
+              }
+            }
+          });
         }
       });
 
-      this.room.state.players.onRemove((_, sessionId) => {
+      this.room.state.players.onRemove((_: any, sessionId: string) => {
         const otherPlayer = this.otherPlayers.get(sessionId);
         if (otherPlayer) {
           otherPlayer.destroy();
           this.otherPlayers.delete(sessionId);
-        }
-      });
-
-      // Listen for player movements
-      this.room.state.players.onChange((player, sessionId) => {
-        if (sessionId !== this.room?.sessionId) {
-          const otherPlayer = this.otherPlayers.get(sessionId);
-          if (otherPlayer) {
-            otherPlayer.x = player.x;
-            otherPlayer.y = player.y;
-            otherPlayer.facingDirection = player.facingDirection;
-            if (player.isMoving) {
-              otherPlayer.anims.play(player.facingDirection > 0 ? 'right' : 'left', true);
-            } else {
-              otherPlayer.anims.play('turn');
-            }
-          }
         }
       });
 
@@ -92,78 +85,82 @@ export class MultiplayerGameScene extends Scene {
         if (message.playerId !== this.room?.sessionId) {
           const otherPlayer = this.otherPlayers.get(message.playerId);
           if (otherPlayer) {
-            const bullet = this.physics.add.sprite(message.x, message.y, 'bullet');
-            bullet.setVelocityX(400 * message.direction);
-            // Auto-destroy bullet after 2 seconds
-            this.time.delayedCall(2000, () => bullet.destroy());
+            // Use the same bullet system as single player
+            const bullet = this.gameState.bullets.get(message.x, message.y);
+            if (bullet) {
+              bullet.fire(message.x, message.y, message.direction);
+            }
           }
         }
       });
 
-    } catch (error) {
-      console.error("Could not connect to server:", error);
+          } catch (error) {
+        console.error("Could not connect to server:", error);
+        // Show error message in game
+        this.add.text(16, 16, 'Failed to connect to server!\nCheck console for details', {
+          fontSize: '18px',
+          backgroundColor: '#ff0000',
+          padding: { x: 10, y: 5 }
+        });
     }
-
-    // Add collision between all players and platforms
-    this.physics.add.collider(this.player, this.platforms);
-    this.otherPlayers.forEach(otherPlayer => {
-      this.physics.add.collider(otherPlayer, this.platforms);
-    });
   }
 
   update() {
-    if (!this.player || !this.cursors || !this.room) return;
+    if (!this.room) return;
+    
+    // Use shared game logic with multiplayer callbacks
+    GameLogic.handleMovement(
+      this.gameState,
+      () => this.sendPlayerState(true),  // onMove
+      () => this.sendPlayerState(false), // onStop
+      () => {}                           // onJump (no special handling needed)
+    );
+    
+    GameLogic.handleShooting(
+      this.gameState, 
+      this, 
+      (x, y, direction) => this.sendShootEvent(x, y, direction)
+    );
 
-    // Handle player movement
-    if (this.cursors.left.isDown) {
-      this.player.moveLeft();
-      this.sendPlayerState(true);
-    } else if (this.cursors.right.isDown) {
-      this.player.moveRight();
-      this.sendPlayerState(true);
-    } else {
-      this.player.stop();
-      this.sendPlayerState(false);
-    }
-
-    // Handle jumping
-    const onGround = this.player.body && (this.player.body.touching.down || this.player.body.blocked.down);
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.up) && onGround) {
-      this.player.jump();
-    }
-
-    // Handle shooting
-    if (Phaser.Input.Keyboard.JustDown(this.shootKey)) {
-      this.shoot();
-    }
+    // Smooth interpolation for other players
+    this.otherPlayers.forEach(otherPlayer => {
+      const distanceX = Math.abs(otherPlayer.targetX - otherPlayer.smoothX);
+      const distanceY = Math.abs(otherPlayer.targetY - otherPlayer.smoothY);
+      
+      // If very close to target, snap to it to prevent sliding
+      if (distanceX < 1 && distanceY < 1) {
+        otherPlayer.smoothX = otherPlayer.targetX;
+        otherPlayer.smoothY = otherPlayer.targetY;
+      } else {
+        const lerpFactor = 0.2; // Slightly higher for responsiveness
+        otherPlayer.smoothX += (otherPlayer.targetX - otherPlayer.smoothX) * lerpFactor;
+        otherPlayer.smoothY += (otherPlayer.targetY - otherPlayer.smoothY) * lerpFactor;
+      }
+      
+      // Apply smoothed position
+      otherPlayer.x = otherPlayer.smoothX;
+      otherPlayer.y = otherPlayer.smoothY;
+    });
   }
 
   private sendPlayerState(isMoving: boolean) {
     if (!this.room) return;
     
     this.room.send("move", {
-      x: this.player.x,
-      y: this.player.y,
-      facingDirection: this.player.facingDirection,
+      x: this.gameState.player.x,
+      y: this.gameState.player.y,
+      facingDirection: this.gameState.player.facingDirection,
       isMoving
     });
   }
 
-  private shoot() {
+  private sendShootEvent(x: number, y: number, direction: number) {
     if (!this.room) return;
-
-    const spawnPos = this.player.getBulletSpawnPosition();
-    const bullet = this.physics.add.sprite(spawnPos.x, spawnPos.y, 'bullet');
-    bullet.setVelocityX(400 * this.player.facingDirection);
-
-    // Send shoot event to server
+    
     this.room.send("shoot", {
-      x: spawnPos.x,
-      y: spawnPos.y,
-      direction: this.player.facingDirection
+      x,
+      y,
+      direction
     });
-
-    // Auto-destroy bullet after 2 seconds
-    this.time.delayedCall(2000, () => bullet.destroy());
   }
 }

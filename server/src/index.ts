@@ -13,7 +13,16 @@ const server = createServer(app);
 const gameServer = new Server({
   transport: new WebSocketTransport({
     server,
+    pingInterval: 3000, // Send ping every 3 seconds
+    pingMaxRetries: 3,  // Allow 3 retries before dropping connection
   }),
+});
+
+// Enable CORS
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  next();
 });
 
 // Register GameRoom as "game"
