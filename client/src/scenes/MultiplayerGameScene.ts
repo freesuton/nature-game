@@ -17,6 +17,7 @@ export class MultiplayerGameScene extends Scene {
   private room?: Room;
   private client?: Client;
 
+
   constructor() {
     super({ key: 'MultiplayerGameScene' });
   }
@@ -45,7 +46,8 @@ export class MultiplayerGameScene extends Scene {
       // Handle room state changes
       this.room.state.players.onAdd((player: any, sessionId: string) => {
         if (sessionId !== this.room?.sessionId) {
-          const otherPlayer = new Player(this, player.x, player.y) as OtherPlayer;
+          // Use server-assigned color
+          const otherPlayer = new Player(this, player.x, player.y, player.color) as OtherPlayer;
           otherPlayer.sessionId = sessionId;
           otherPlayer.targetX = player.x;
           otherPlayer.targetY = player.y;
@@ -69,6 +71,9 @@ export class MultiplayerGameScene extends Scene {
               }
             }
           });
+        } else {
+          // This is the local player - apply the server-assigned color
+          this.gameState.player.setTint(player.color);
         }
       });
 
@@ -94,14 +99,14 @@ export class MultiplayerGameScene extends Scene {
         }
       });
 
-          } catch (error) {
-        console.error("Could not connect to server:", error);
-        // Show error message in game
-        this.add.text(16, 16, 'Failed to connect to server!\nCheck console for details', {
-          fontSize: '18px',
-          backgroundColor: '#ff0000',
-          padding: { x: 10, y: 5 }
-        });
+    } catch (error) {
+      console.error("Could not connect to server:", error);
+      // Show error message in game
+      this.add.text(16, 16, 'Failed to connect to server!\nCheck console for details', {
+        fontSize: '18px',
+        backgroundColor: '#ff0000',
+        padding: { x: 10, y: 5 }
+      });
     }
   }
 
@@ -163,4 +168,6 @@ export class MultiplayerGameScene extends Scene {
       direction
     });
   }
+
+
 }

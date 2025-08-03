@@ -12,4 +12,7 @@ export class PlayerState extends Schema {
 
   @type("boolean")
   isMoving: boolean = false;
+
+  @type("number")
+  color: number = 0xffffff; // Default white color
 }

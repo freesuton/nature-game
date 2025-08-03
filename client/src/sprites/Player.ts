@@ -6,12 +6,17 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   declare body: Phaser.Physics.Arcade.Body;
   public facingDirection: number = 1; // 1 for right, -1 for left
 
-  constructor(scene: Scene, x: number, y: number) {
+  constructor(scene: Scene, x: number, y: number, color?: number) {
     super(scene, x, y, 'player');
     
     // Add this sprite to the scene
     scene.add.existing(this);
     scene.physics.add.existing(this);
+
+    // Apply color tint if provided
+    if (color !== undefined) {
+      this.setTint(color);
+    }
 
     // Set up physics properties
     this.setCollideWorldBounds(true);
