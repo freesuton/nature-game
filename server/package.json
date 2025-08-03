@@ -12,6 +12,7 @@
     "@colyseus/core": "^0.15.0",
     "@colyseus/monitor": "^0.15.0",
     "@colyseus/schema": "^2.0.20",
+    "@colyseus/ws-transport": "^0.15.0",
     "express": "^4.18.3",
     "shared": "*"
   },

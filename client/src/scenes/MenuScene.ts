@@ -51,15 +51,6 @@ export class MenuScene extends Scene {
   }
 
   private startMultiplayer() {
-    // We'll implement this later when adding multiplayer
-    console.log('Multiplayer selected - to be implemented');
-    // For now, just show a message
-    const text = this.add.text(400, 440, 'Multiplayer coming soon!', {
-      fontSize: '18px',
-      color: '#ff0000'
-    }).setOrigin(0.5);
-
-    // Remove the message after 2 seconds
-    this.time.delayedCall(2000, () => text.destroy());
+    this.scene.start('MultiplayerGameScene');
   }
 }
