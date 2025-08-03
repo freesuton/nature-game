@@ -15,4 +15,7 @@ export class PlayerState extends Schema {
 
   @type("boolean")
   onGround: boolean = true;
+
+  @type("number")
+  facingDirection: number = 1; // 1 for right, -1 for left
 }

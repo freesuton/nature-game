@@ -10,6 +10,10 @@ export class GameRoom extends Room<GameState> {
   private readonly JUMP_FORCE: number = -650;
   private readonly GROUND_Y: number = 450;
   private readonly MOVE_SPEED: number = 160;
+  private readonly BULLET_SPEED: number = 1000;
+  
+  private bullets: Map<string, { x: number, y: number, velocityX: number, ownerId: string }> = new Map();
+  private bulletId: number = 0;
 
   onCreate() {
     console.log("GameRoom created!");
@@ -38,11 +42,40 @@ export class GameRoom extends Room<GameState> {
       // Set horizontal velocity based on input
       if (data.left && !data.right) {
         player.velocityX = -this.MOVE_SPEED;
+        player.facingDirection = -1;
       } else if (data.right && !data.left) {
         player.velocityX = this.MOVE_SPEED;
+        player.facingDirection = 1;
       } else {
         player.velocityX = 0;
       }
+    });
+
+    // Handle shoot requests
+    this.onMessage("shoot", (client) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player) return;
+
+      // Create bullet on server
+      const direction = player.facingDirection;
+      const bulletData = {
+        x: player.x + (direction * 20), // Spawn in front of player
+        y: player.y - 5,
+        velocityX: this.BULLET_SPEED * direction,
+        ownerId: client.sessionId
+      };
+
+      const bulletIdStr = this.bulletId.toString();
+      this.bullets.set(bulletIdStr, bulletData);
+      this.bulletId++;
+
+      // Broadcast bullet creation to all clients
+      this.broadcast("bulletCreate", {
+        id: bulletIdStr,
+        ...bulletData
+      });
+
+      console.log(`Player ${client.sessionId} shot a bullet!`);
     });
   }
 
@@ -85,6 +118,46 @@ export class GameRoom extends Room<GameState> {
         player.velocityY = 0;
         player.onGround = true;
       }
+    });
+
+    // Update bullets
+    this.bullets.forEach((bullet, bulletId) => {
+      // Update position
+      bullet.x += bullet.velocityX * deltaTime;
+
+      // Check for world bounds
+      if (bullet.x < -50 || bullet.x > 850) {
+        this.bullets.delete(bulletId);
+        this.broadcast("bulletDestroy", { id: bulletId });
+        return;
+      }
+
+      // Check for collisions with players
+      this.state.players.forEach((player, playerId) => {
+        if (playerId !== bullet.ownerId) { // Don't hit self
+          const dx = Math.abs(bullet.x - player.x);
+          const dy = Math.abs(bullet.y - player.y);
+          if (dx < 20 && dy < 30) { // Simple box collision
+            // Hit! Remove bullet and reset player
+            this.bullets.delete(bulletId);
+            this.broadcast("bulletDestroy", { id: bulletId });
+            
+            // Reset hit player
+            player.x = 100;
+            player.y = 450;
+            player.velocityX = 0;
+            player.velocityY = 0;
+            player.onGround = true;
+          }
+        }
+      });
+
+      // Broadcast bullet position update
+      this.broadcast("bulletUpdate", {
+        id: bulletId,
+        x: bullet.x,
+        y: bullet.y
+      });
     });
   }
 }

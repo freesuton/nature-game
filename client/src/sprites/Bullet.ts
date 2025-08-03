@@ -12,7 +12,7 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
     scene.physics.add.existing(this);
 
     // Set up physics properties
-    this.setScale(0.5);
+    this.setScale(1);
     this.body.setSize(8, 8); // Small collision box
   }
 
