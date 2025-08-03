@@ -7,11 +7,13 @@ export class MultiplayerGameScene extends Scene {
   private room?: Room;
   private localPlayer?: Player;
   private otherPlayers: Map<string, Player> = new Map();
+  private playerTargets: Map<string, { x: number, y: number }> = new Map();
   private platforms?: Phaser.Physics.Arcade.StaticGroup;
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: any;
   private bullets: Map<string, Bullet> = new Map();
   private shootKey?: Phaser.Input.Keyboard.Key;
+  private readonly INTERPOLATION_FACTOR = 0.6; // Smoothing factor (0-1) 0.1 is the smoothest, 1 is the least smooth
 
   constructor() {
     super({ key: 'MultiplayerGameScene' });
@@ -76,6 +78,7 @@ export class MultiplayerGameScene extends Scene {
           this.localPlayer.body.setAllowGravity(false);
           this.localPlayer.body.setVelocity(0, 0);
           this.localPlayer.body.setImmovable(true);
+          this.playerTargets.set(sessionId, { x: player.x, y: player.y });
         } else {
           // This is another player
           const otherPlayer = new Player(this, player.x, player.y);
@@ -84,6 +87,7 @@ export class MultiplayerGameScene extends Scene {
           otherPlayer.body.setAllowGravity(false);
           otherPlayer.body.setVelocity(0, 0);
           otherPlayer.body.setImmovable(true);
+          this.playerTargets.set(sessionId, { x: player.x, y: player.y });
         }
 
         // Listen for state changes
@@ -109,9 +113,8 @@ export class MultiplayerGameScene extends Scene {
               targetPlayer.anims.play('left', true);
             }
             
-            // Update position
-            targetPlayer.x = player.x;
-            targetPlayer.y = player.y;
+            // Update target position for interpolation
+            this.playerTargets.set(sessionId, { x: player.x, y: player.y });
           }
         });
       });
@@ -123,6 +126,7 @@ export class MultiplayerGameScene extends Scene {
           otherPlayer.destroy();
           this.otherPlayers.delete(sessionId);
         }
+        this.playerTargets.delete(sessionId);
       });
 
     } catch (error) {
@@ -151,6 +155,21 @@ export class MultiplayerGameScene extends Scene {
       console.log("Sending shoot request");
       this.room.send("shoot");
     }
+
+    // Interpolate all player positions
+    this.playerTargets.forEach((target, sessionId) => {
+      const player = sessionId === this.room?.sessionId 
+        ? this.localPlayer 
+        : this.otherPlayers.get(sessionId);
+      
+      if (player) {
+        // Always interpolate X position smoothly
+        player.x = Phaser.Math.Interpolation.Linear([player.x, target.x], this.INTERPOLATION_FACTOR);
+        
+        // For Y position, use lerp for both jumping and falling
+        player.y = Phaser.Math.Interpolation.Linear([player.y, target.y], this.INTERPOLATION_FACTOR);
+      }
+    });
   }
 
 
