@@ -77,6 +77,34 @@ export class GameRoom extends Room<GameState> {
 
       console.log(`Player ${client.sessionId} shot a bullet!`);
     });
+
+    // Handle quit button clicks
+    this.onMessage("quitGame", (client) => {
+      console.log(`Player ${client.sessionId} clicked quit button - cleaning up all data`);
+      
+      // Remove player from game state immediately
+      const wasRemoved = this.state.players.delete(client.sessionId);
+      console.log(`Player removal result: ${wasRemoved}`);
+      
+      // Clean up any bullets owned by this player
+      let bulletsRemoved = 0;
+      this.bullets.forEach((bullet, bulletId) => {
+        if (bullet.ownerId === client.sessionId) {
+          this.bullets.delete(bulletId);
+          this.broadcast("bulletDestroy", { id: bulletId });
+          bulletsRemoved++;
+        }
+      });
+      
+      if (bulletsRemoved > 0) {
+        console.log(`Removed ${bulletsRemoved} bullets owned by ${client.sessionId}`);
+      }
+      
+      console.log(`Player ${client.sessionId} completely removed from game. Remaining players: ${this.state.players.size}`);
+      
+      // Force state synchronization
+      this.broadcastPatch();
+    });
   }
 
   onJoin(client: Client) {
@@ -91,7 +119,19 @@ export class GameRoom extends Room<GameState> {
 
   onLeave(client: Client) {
     console.log(`Player ${client.sessionId} left!`);
+    
+    // Remove player from game state
     this.state.players.delete(client.sessionId);
+    
+    // Clean up any bullets owned by this player
+    this.bullets.forEach((bullet, bulletId) => {
+      if (bullet.ownerId === client.sessionId) {
+        this.bullets.delete(bulletId);
+        this.broadcast("bulletDestroy", { id: bulletId });
+      }
+    });
+    
+    console.log(`Player ${client.sessionId} left - remaining players: ${this.state.players.size}`);
   }
 
   private updatePhysics() {

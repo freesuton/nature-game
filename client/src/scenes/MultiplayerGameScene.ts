@@ -14,7 +14,7 @@ export class MultiplayerGameScene extends Scene {
   private bullets: Map<string, Bullet> = new Map();
   private shootKey?: Phaser.Input.Keyboard.Key;
   private readonly INTERPOLATION_FACTOR = 0.6; // Smoothing factor (0-1) 0.1 is the smoothest, 1 is the least smooth
-  private quitButton?: Phaser.GameObjects.Text;
+
   private deathDialog?: Phaser.GameObjects.Container;
   private isDead: boolean = false;
 
@@ -43,7 +43,7 @@ export class MultiplayerGameScene extends Scene {
     this.shootKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J);
 
     // Create quit button
-    this.quitButton = this.add.text(16, 16, 'Quit', {
+    this.add.text(16, 16, 'Quit', {
       fontSize: '24px',
       color: '#ffffff',
       backgroundColor: '#ff0000',
@@ -53,7 +53,7 @@ export class MultiplayerGameScene extends Scene {
     .setScrollFactor(0)
     .setDepth(1000)
     .on('pointerdown', () => {
-      this.scene.start('MenuScene');
+      this.quitToMenu();
     });
 
     // Connect to Colyseus server
@@ -286,17 +286,35 @@ export class MultiplayerGameScene extends Scene {
 
     // Handle player removal
     this.room.state.players.onRemove((player: any, sessionId: string) => {
-      const otherPlayer = this.otherPlayers.get(sessionId);
-      if (otherPlayer) {
-        otherPlayer.destroy();
-        this.otherPlayers.delete(sessionId);
+      console.log(`Player ${sessionId} removed from game state`);
+      
+      // Check if it's the local player
+      if (sessionId === this.room?.sessionId) {
+        if (this.localPlayer) {
+          this.localPlayer.destroy();
+          this.localPlayer = undefined;
+        }
+      } else {
+        // It's another player
+        const otherPlayer = this.otherPlayers.get(sessionId);
+        if (otherPlayer) {
+          otherPlayer.destroy();
+          this.otherPlayers.delete(sessionId);
+        }
       }
       this.playerTargets.delete(sessionId);
     });
   }
 
-  private quitToMenu() {
+  private async quitToMenu() {
     if (this.room) {
+      // Send quit message to server for immediate cleanup
+      this.room.send("quitGame");
+      
+      // Wait a moment for server to process and broadcast the state change
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Then leave the room
       this.room.leave();
     }
     this.scene.start('MenuScene');
