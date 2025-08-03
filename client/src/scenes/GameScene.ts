@@ -13,22 +13,7 @@ export class GameScene extends Scene {
   }
 
   create() {
-    this.gameState = GameLogic.createWorld(this, true); // Enable enemies for single player
-    
-    // Add quit button as fixed UI element
-    const quitButton = this.add.text(16, 16, 'Quit', {
-      fontSize: '24px',
-      backgroundColor: '#ff4444',
-      padding: { x: 10, y: 5 }
-    })
-    .setInteractive()
-    .setScrollFactor(0) // Fix to camera - won't move with world
-    .setDepth(1000) // Ensure it's on top
-    .on('pointerdown', () => {
-      this.scene.start('MenuScene');
-    })
-    .on('pointerover', () => quitButton.setStyle({ backgroundColor: '#ff6666' }))
-    .on('pointerout', () => quitButton.setStyle({ backgroundColor: '#ff4444' }));
+    this.gameState = GameLogic.createWorld(this);
     
     // Debug: Add key press listeners
     this.input.keyboard!.on('keydown', (event: KeyboardEvent) => {
@@ -41,6 +26,5 @@ export class GameScene extends Scene {
     GameLogic.handleShooting(this.gameState, this, (x, y, direction) => {
       console.log('Bullet fired!', direction > 0 ? 'right' : 'left');
     });
-    GameLogic.updateEnemies(this.gameState);
   }
 }

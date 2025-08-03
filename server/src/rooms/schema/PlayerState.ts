@@ -8,11 +8,11 @@ export class PlayerState extends Schema {
   y: number = 450;
 
   @type("number")
-  facingDirection: number = 1;
-
-  @type("boolean")
-  isMoving: boolean = false;
+  velocityX: number = 0;
 
   @type("number")
-  color: number = 0xffffff; // Default white color
+  velocityY: number = 0;
+
+  @type("boolean")
+  onGround: boolean = true;
 }
