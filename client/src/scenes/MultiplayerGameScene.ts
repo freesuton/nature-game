@@ -75,7 +75,7 @@ export class MultiplayerGameScene extends Scene {
           this.physics.add.collider(otherPlayer, this.gameState.platforms);
           
           // Add bullet collision for other players
-          this.physics.add.overlap(this.gameState.bullets, otherPlayer, (bullet, player) => {
+          this.physics.add.overlap(this.gameState.bullets, otherPlayer, (bullet) => {
             bullet.destroy();
             this.handlePlayerElimination(sessionId);
           });

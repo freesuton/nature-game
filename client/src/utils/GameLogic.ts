@@ -105,11 +105,20 @@ export class GameLogic {
 
     let isMoving = false;
 
-    // Handle player movement
-    if (cursors.left.isDown) {
+    // Additional controls - WASD support
+    const scene = player.scene;
+    const wasd = scene.input.keyboard!.addKeys('W,S,A,D') as {
+      W: Phaser.Input.Keyboard.Key;
+      A: Phaser.Input.Keyboard.Key;
+      S: Phaser.Input.Keyboard.Key;
+      D: Phaser.Input.Keyboard.Key;
+    };
+
+    // Handle player movement - check both arrow keys and WASD
+    if (cursors.left.isDown || wasd.A.isDown) {
       player.moveLeft();
       isMoving = true;
-    } else if (cursors.right.isDown) {
+    } else if (cursors.right.isDown || wasd.D.isDown) {
       player.moveRight();
       isMoving = true;
     } else {
@@ -121,23 +130,6 @@ export class GameLogic {
     if (Phaser.Input.Keyboard.JustDown(cursors.up) && onGround) {
       player.jump();
       onJump?.();
-    }
-
-    // Additional controls - WASD support
-    const scene = player.scene;
-    const wasd = scene.input.keyboard!.addKeys('W,S,A,D') as {
-      W: Phaser.Input.Keyboard.Key;
-      A: Phaser.Input.Keyboard.Key;
-      S: Phaser.Input.Keyboard.Key;
-      D: Phaser.Input.Keyboard.Key;
-    };
-    
-    if (wasd.A.isDown) {
-      player.moveLeft();
-      isMoving = true;
-    } else if (wasd.D.isDown) {
-      player.moveRight();
-      isMoving = true;
     }
     
     if (Phaser.Input.Keyboard.JustDown(wasd.W) && onGround) {
