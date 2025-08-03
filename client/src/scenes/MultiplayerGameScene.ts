@@ -30,6 +30,24 @@ export class MultiplayerGameScene extends Scene {
     // Create base game world using shared logic
     this.gameState = GameLogic.createWorld(this);
 
+    // Add quit button as fixed UI element
+    const quitButton = this.add.text(16, 16, 'Quit', {
+      fontSize: '24px',
+      backgroundColor: '#ff4444',
+      padding: { x: 10, y: 5 }
+    })
+    .setInteractive()
+    .setScrollFactor(0) // Fix to camera - won't move with world
+    .setDepth(1000) // Ensure it's on top
+    .on('pointerdown', () => {
+      if (this.room) {
+        this.room.leave();
+      }
+      this.scene.start('MenuScene');
+    })
+    .on('pointerover', () => quitButton.setStyle({ backgroundColor: '#ff6666' }))
+    .on('pointerout', () => quitButton.setStyle({ backgroundColor: '#ff4444' }));
+
     // Connect to Colyseus server
     try {
       // Use environment variable or fallback for server URL
@@ -56,6 +74,12 @@ export class MultiplayerGameScene extends Scene {
           this.otherPlayers.set(sessionId, otherPlayer);
           this.physics.add.collider(otherPlayer, this.gameState.platforms);
           
+          // Add bullet collision for other players
+          this.physics.add.overlap(this.gameState.bullets, otherPlayer, (bullet, player) => {
+            bullet.destroy();
+            this.handlePlayerElimination(sessionId);
+          });
+          
           // Listen to changes on this specific player
           player.onChange(() => {
             const currentOtherPlayer = this.otherPlayers.get(sessionId);
@@ -77,6 +101,34 @@ export class MultiplayerGameScene extends Scene {
         }
       });
 
+      // Handle incoming bullets hitting local player
+      this.room.onMessage("playerShot", (message) => {
+        if (message.playerId !== this.room?.sessionId) {
+          const bullet = this.gameState.bullets.get(message.x, message.y);
+          if (bullet) {
+            bullet.fire(message.x, message.y, message.direction);
+            
+            // Add collision detection for this bullet with local player
+            this.physics.add.overlap(bullet, this.gameState.player, () => {
+              bullet.destroy();
+              this.handleLocalPlayerElimination();
+            });
+          }
+        }
+      });
+
+      // Handle player elimination messages
+      this.room.onMessage("playerEliminated", (message) => {
+        if (message.eliminatedPlayerId !== this.room?.sessionId) {
+          // Remove the eliminated player from our local game
+          const eliminatedPlayer = this.otherPlayers.get(message.eliminatedPlayerId);
+          if (eliminatedPlayer) {
+            eliminatedPlayer.destroy();
+            this.otherPlayers.delete(message.eliminatedPlayerId);
+          }
+        }
+      });
+
       this.room.state.players.onRemove((_: any, sessionId: string) => {
         const otherPlayer = this.otherPlayers.get(sessionId);
         if (otherPlayer) {
@@ -85,19 +137,7 @@ export class MultiplayerGameScene extends Scene {
         }
       });
 
-      // Listen for shooting events
-      this.room.onMessage("playerShot", (message) => {
-        if (message.playerId !== this.room?.sessionId) {
-          const otherPlayer = this.otherPlayers.get(message.playerId);
-          if (otherPlayer) {
-            // Use the same bullet system as single player
-            const bullet = this.gameState.bullets.get(message.x, message.y);
-            if (bullet) {
-              bullet.fire(message.x, message.y, message.direction);
-            }
-          }
-        }
-      });
+
 
     } catch (error) {
       console.error("Could not connect to server:", error);
@@ -169,5 +209,40 @@ export class MultiplayerGameScene extends Scene {
     });
   }
 
+  private handlePlayerElimination(eliminatedPlayerId: string) {
+    // Send elimination message to server
+    if (this.room) {
+      this.room.send("playerEliminated", {
+        eliminatedPlayerId,
+        eliminatorId: this.room.sessionId
+      });
+    }
 
+    // Remove eliminated player locally
+    const eliminatedPlayer = this.otherPlayers.get(eliminatedPlayerId);
+    if (eliminatedPlayer) {
+      eliminatedPlayer.destroy();
+      this.otherPlayers.delete(eliminatedPlayerId);
+    }
+  }
+
+  private handleLocalPlayerElimination() {
+    // Show elimination message
+    const eliminationText = this.add.text(this.cameras.main.centerX, this.cameras.main.centerY, 'You were eliminated!', {
+      fontSize: '32px',
+      backgroundColor: '#ff0000',
+      padding: { x: 20, y: 10 }
+    })
+    .setOrigin(0.5)
+    .setScrollFactor(0)
+    .setDepth(2000);
+
+    // Auto-return to menu after 3 seconds
+    this.time.delayedCall(3000, () => {
+      if (this.room) {
+        this.room.leave();
+      }
+      this.scene.start('MenuScene');
+    });
+  }
 }

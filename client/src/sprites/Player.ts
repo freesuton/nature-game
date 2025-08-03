@@ -2,7 +2,7 @@ import { Scene } from 'phaser';
 
 export class Player extends Phaser.Physics.Arcade.Sprite {
   private moveSpeed: number = 160;
-  private jumpForce: number = -330;
+  private jumpForce: number = -650; // Increased for even higher jumps
   declare body: Phaser.Physics.Arcade.Body;
   public facingDirection: number = 1; // 1 for right, -1 for left
 
@@ -22,6 +22,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.setCollideWorldBounds(true);
     this.setBounce(0);
     this.setDragX(500); // Add some drag for better control
+    this.setGravityY(800); // Increased from default ~300 for faster falling
 
     // Create animations
     scene.anims.create({

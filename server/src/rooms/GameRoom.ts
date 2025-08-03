@@ -44,6 +44,24 @@ export class GameRoom extends Room<GameState> {
         direction: data.direction
       }, { except: client });
     });
+
+    // Handle player elimination
+    this.onMessage("playerEliminated", (client, data) => {
+      console.log(`Player ${data.eliminatedPlayerId} was eliminated by ${data.eliminatorId}`);
+      
+      // Remove the eliminated player from the game state
+      const eliminatedPlayer = this.state.players.get(data.eliminatedPlayerId);
+      if (eliminatedPlayer) {
+        this.usedColors.delete(eliminatedPlayer.color);
+        this.state.players.delete(data.eliminatedPlayerId);
+      }
+
+      // Broadcast elimination to all clients
+      this.broadcast("playerEliminated", {
+        eliminatedPlayerId: data.eliminatedPlayerId,
+        eliminatorId: data.eliminatorId
+      });
+    });
   }
 
   onJoin(client: Client) {
