@@ -35,8 +35,7 @@ export class MultiplayerGameScene extends Scene {
   async create() {
     // Create platforms
     this.platforms = this.physics.add.staticGroup();
-    this.platforms.create(400, 540, 'ground').setScale(2).refreshBody();
-
+    this.add.line(800, 400, -400, 0, 400, 0, 0xff0000);
     // Set up keyboard input
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys('W,S,A,D');
@@ -55,6 +54,9 @@ export class MultiplayerGameScene extends Scene {
     .on('pointerdown', () => {
       this.quitToMenu();
     });
+
+    // Add height ruler for debugging
+    this.addHeightRuler();
 
     // Connect to Colyseus server
     try {
@@ -304,6 +306,83 @@ export class MultiplayerGameScene extends Scene {
       }
       this.playerTargets.delete(sessionId);
     });
+  }
+
+  private addHeightRuler() {
+    // Create vertical ruler on the left side
+    const rulerX = 50;
+    
+    // Draw ruler line
+    const graphics = this.add.graphics();
+    graphics.lineStyle(2, 0xffffff);
+    graphics.moveTo(rulerX, 0);
+    graphics.lineTo(rulerX, 600);
+    graphics.stroke();
+    graphics.setScrollFactor(0);
+    graphics.setDepth(999);
+    
+    // Add height markers every 50 pixels
+    for (let y = 0; y <= 600; y += 50) {
+      // Tick mark
+      graphics.lineStyle(2, 0xffffff);
+      graphics.moveTo(rulerX - 5, y);
+      graphics.lineTo(rulerX + 5, y);
+      graphics.stroke();
+      
+      // Y coordinate label
+      this.add.text(rulerX + 10, y - 10, `${y}`, {
+        fontSize: '12px',
+        color: '#ffffff'
+      })
+      .setScrollFactor(0)
+      .setDepth(999);
+    }
+    
+    // Add platform height indicators (will be updated when platforms are created)
+    this.add.text(rulerX + 15, 568 - 10, '← Ground (568)', {
+      fontSize: '14px',
+      color: '#00ff00',
+      backgroundColor: '#000000',
+      padding: { x: 2, y: 2 }
+    })
+    .setScrollFactor(0)
+    .setDepth(999);
+    
+    this.add.text(rulerX + 15, 400 - 10, '← Platform (400)', {
+      fontSize: '14px',
+      color: '#ffff00',
+      backgroundColor: '#000000',
+      padding: { x: 2, y: 2 }
+    })
+    .setScrollFactor(0)
+    .setDepth(999);
+    
+    this.add.text(rulerX + 15, 250 - 10, '← Platform (250)', {
+      fontSize: '14px',
+      color: '#ffff00',
+      backgroundColor: '#000000',
+      padding: { x: 2, y: 2 }
+    })
+    .setScrollFactor(0)
+    .setDepth(999);
+    
+    this.add.text(rulerX + 15, 220 - 10, '← Platform (220)', {
+      fontSize: '14px',
+      color: '#ffff00',
+      backgroundColor: '#000000',
+      padding: { x: 2, y: 2 }
+    })
+    .setScrollFactor(0)
+    .setDepth(999);
+    
+    this.add.text(rulerX + 15, 450 - 10, '← Player Spawn (450)', {
+      fontSize: '14px',
+      color: '#ff0000',
+      backgroundColor: '#000000',
+      padding: { x: 2, y: 2 }
+    })
+    .setScrollFactor(0)
+    .setDepth(999);
   }
 
   private async quitToMenu() {

@@ -8,9 +8,13 @@ export class GameRoom extends Room<GameState> {
   // Physics constants
   private readonly GRAVITY: number = 800;
   private readonly JUMP_FORCE: number = -650;
-  private readonly GROUND_Y: number = 450;
   private readonly MOVE_SPEED: number = 160;
   private readonly BULLET_SPEED: number = 1000;
+  
+  // Character dimensions
+  private readonly PLAYER_HEIGHT: number = 48; // Player sprite height
+  private readonly GROUND_PLATFORM_Y: number = 400; // Platform center position
+  private readonly GROUND_Y: number = this.GROUND_PLATFORM_Y - this.PLAYER_HEIGHT / 2; // Where player stands
   
   private bullets: Map<string, { x: number, y: number, velocityX: number, ownerId: string }> = new Map();
   private bulletId: number = 0;
@@ -112,6 +116,11 @@ export class GameRoom extends Room<GameState> {
     
     // Create a new player state
     const player = new PlayerState();
+    
+    // Set spawn position based on ground platform and player height
+    player.x = 100;
+    player.y = this.GROUND_Y; // Dynamically calculated position
+    player.onGround = true;
     
     // Add the player to the game state
     this.state.players.set(client.sessionId, player);
