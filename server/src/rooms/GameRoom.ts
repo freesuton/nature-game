@@ -161,8 +161,27 @@ export class GameRoom extends Room<GameState> {
       if (player.x < 0) player.x = 0;
       if (player.x > 800) player.x = 800;
 
+      // Ground and platform collisions
+      const SKY_PLATFORM_Y = 250 - this.PLAYER_HEIGHT/2; // Platform at 250, adjust for player height
+      
+      // If player is at platform height, check if they should fall off
+      if (player.y <= SKY_PLATFORM_Y + 10 && Math.abs(player.y - SKY_PLATFORM_Y) < 5) {
+        if (player.x < 300 || player.x > 500) { // Outside platform width
+          player.onGround = false; // Start falling
+        }
+      }
+      
+      // Check sky platform collision when falling
+      if (player.velocityY > 0 && 
+          player.y >= SKY_PLATFORM_Y && 
+          player.y <= SKY_PLATFORM_Y + 10 && // Small tolerance for collision
+          player.x >= 300 && player.x <= 500) { // Platform width is 200, centered at 400
+        player.y = SKY_PLATFORM_Y;
+        player.velocityY = 0;
+        player.onGround = true;
+      }
       // Ground collision
-      if (player.y >= this.GROUND_Y) {
+      else if (player.y >= this.GROUND_Y) {
         player.y = this.GROUND_Y;
         player.velocityY = 0;
         player.onGround = true;

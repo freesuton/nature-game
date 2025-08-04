@@ -35,7 +35,12 @@ export class MultiplayerGameScene extends Scene {
   async create() {
     // Create platforms
     this.platforms = this.physics.add.staticGroup();
-    this.add.line(800, 400, -400, 0, 400, 0, 0xff0000);
+    // center, height, 0,0,width,0, color
+    // Ground
+    this.add.line(400, 400, 0, 0, 800, 0, 0x0000ff);
+    this.add.line(400, 250, 0, 0, 200, 0, 0x0000ff);
+
+
     // Set up keyboard input
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys('W,S,A,D');
