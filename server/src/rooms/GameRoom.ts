@@ -1,6 +1,7 @@
 import { Room, Client } from '@colyseus/core';
 import { GameState } from './schema/GameState';
 import { PlayerState } from './schema/PlayerState';
+import * as planck from 'planck';
 
 export class GameRoom extends Room<GameState> {
   maxClients = 4;
@@ -19,9 +20,22 @@ export class GameRoom extends Room<GameState> {
   private bullets: Map<string, { x: number, y: number, velocityX: number, ownerId: string }> = new Map();
   private bulletId: number = 0;
 
+  // Planck.js physics world and bodies
+  private world!: planck.World;
+  private playerBodies: Map<string, planck.Body> = new Map();
+  private platformBodies: planck.Body[] = [];
+
   onCreate() {
     console.log("GameRoom created!");
     this.setState(new GameState());
+    
+    // Initialize planck.js physics world
+    this.world = planck.World({
+      gravity: planck.Vec2(0, 0) // We'll handle gravity ourselves for better jump control
+    });
+
+    // Create static platforms
+    this.createPlatforms();
     
     // Start physics simulation at 60 FPS
     this.setSimulationInterval(() => this.updatePhysics(), 1000/60);
@@ -121,6 +135,22 @@ export class GameRoom extends Room<GameState> {
     player.x = 100;
     player.y = this.GROUND_Y; // Dynamically calculated position
     player.onGround = true;
+
+    // Create physics body for player
+    const playerBody = this.world.createBody({
+      type: 'dynamic',
+      position: planck.Vec2(player.x, player.y),
+      fixedRotation: true
+    });
+    
+    playerBody.createFixture({
+      shape: planck.Box(16, 16), // Half-width, half-height (32x48 total)
+      density: 1.0,
+      friction: 0.3
+    });
+    
+    // Store the body reference
+    this.playerBodies.set(client.sessionId, playerBody);
     
     // Add the player to the game state
     this.state.players.set(client.sessionId, player);
@@ -128,6 +158,13 @@ export class GameRoom extends Room<GameState> {
 
   onLeave(client: Client) {
     console.log(`Player ${client.sessionId} left!`);
+    
+    // Remove physics body
+    const playerBody = this.playerBodies.get(client.sessionId);
+    if (playerBody) {
+      this.world.destroyBody(playerBody);
+      this.playerBodies.delete(client.sessionId);
+    }
     
     // Remove player from game state
     this.state.players.delete(client.sessionId);
@@ -143,48 +180,93 @@ export class GameRoom extends Room<GameState> {
     console.log(`Player ${client.sessionId} left - remaining players: ${this.state.players.size}`);
   }
 
+  private createPlatforms() {
+    // Ground platform
+    const groundBody = this.world.createBody({
+      type: 'static',
+      position: planck.Vec2(400, this.GROUND_PLATFORM_Y+8)
+    });
+    groundBody.createFixture({
+      shape: planck.Box(400, 16), // Half-width, half-height
+      friction: 0.3
+    });
+    this.platformBodies.push(groundBody);
+
+    // Sky platform
+    const skyBody = this.world.createBody({
+      type: 'static',
+      position: planck.Vec2(400, 258)
+    });
+    skyBody.createFixture({
+      shape: planck.Box(100, 16), // Half-width, half-height
+      friction: 0.3
+    });
+    this.platformBodies.push(skyBody);
+  }
+
   private updatePhysics() {
     const deltaTime = 1/60; // Fixed timestep for physics
 
     // Update each player's physics
-    this.state.players.forEach((player) => {
+    this.state.players.forEach((player, sessionId) => {
+      const playerBody = this.playerBodies.get(sessionId);
+      if (!playerBody) return;
+
       // Apply gravity if not on ground
       if (!player.onGround) {
         player.velocityY += this.GRAVITY * deltaTime;
       }
 
-      // Update position
+      // Update position directly
       player.x += player.velocityX * deltaTime;
       player.y += player.velocityY * deltaTime;
-
-      // World bounds for x
-      if (player.x < 0) player.x = 0;
-      if (player.x > 800) player.x = 800;
-
-      // Ground and platform collisions
-      const SKY_PLATFORM_Y = 250 - this.PLAYER_HEIGHT/2; // Platform at 250, adjust for player height
       
-      // If player is at platform height, check if they should fall off
-      if (player.y <= SKY_PLATFORM_Y + 10 && Math.abs(player.y - SKY_PLATFORM_Y) < 5) {
-        if (player.x < 300 || player.x > 500) { // Outside platform width
-          player.onGround = false; // Start falling
+      // Update physics body position for collision detection only
+      playerBody.setPosition(planck.Vec2(player.x, player.y));
+      
+      // Step the physics world for collision detection
+      this.world.step(deltaTime);
+
+      // No need to get position from physics body since we're updating it directly
+
+      // Check for ground contact using Planck.js collision detection
+      let isOnGround = false;
+      for (let ce = playerBody.getContactList(); ce; ce = ce.next) {
+        const contact = ce.contact;
+        if (!contact) continue;
+        
+        const other = ce.other;
+        // Check if the contact is with a platform
+        if (other && this.platformBodies.includes(other)) {
+          const manifold = contact.getManifold();
+                // Check if the contact normal is pointing upward (we're on top)
+      if (manifold.localNormal.y < -0.5) {
+        isOnGround = true;
+        // Adjust position to exactly stand on platform
+        const platformPos = other.getPosition();
+        const platformHeight = (other === this.platformBodies[0]) ? 16 : 16; // Both platforms now have height 16
+        player.y = platformPos.y - platformHeight - 16; // 16 is half of player height
+        break;
+          }
         }
       }
-      
-      // Check sky platform collision when falling
-      if (player.velocityY > 0 && 
-          player.y >= SKY_PLATFORM_Y && 
-          player.y <= SKY_PLATFORM_Y + 10 && // Small tolerance for collision
-          player.x >= 300 && player.x <= 500) { // Platform width is 200, centered at 400
-        player.y = SKY_PLATFORM_Y;
-        player.velocityY = 0;
+
+      // Update ground state
+      if (isOnGround && player.velocityY >= 0) {
         player.onGround = true;
+        player.velocityY = 0;
+      } else {
+        player.onGround = false;
       }
-      // Ground collision
-      else if (player.y >= this.GROUND_Y) {
-        player.y = this.GROUND_Y;
-        player.velocityY = 0;
-        player.onGround = true;
+
+      // World bounds for x
+      if (player.x < 16) {
+        player.x = 16;
+        playerBody.setPosition(planck.Vec2(16, player.y));
+      }
+      if (player.x > 784) {
+        player.x = 784;
+        playerBody.setPosition(planck.Vec2(784, player.y));
       }
     });
 
