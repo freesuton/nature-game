@@ -4,6 +4,7 @@ import { createServer } from 'http';
 import express from 'express';
 import { monitor } from '@colyseus/monitor';
 import { GameRoom } from './rooms/GameRoom';
+import { SimpleRoom } from './rooms/SimpleRoom';
 
 const port = Number(process.env.PORT || 2567);
 const app = express();
@@ -27,6 +28,9 @@ app.use((req, res, next) => {
 
 // Register GameRoom as "game"
 gameServer.define("game", GameRoom);
+
+// Register SimpleRoom as "simple"
+gameServer.define("simple", SimpleRoom);
 
 // Register Colyseus Monitor (development only)
 app.use("/colyseus", monitor());

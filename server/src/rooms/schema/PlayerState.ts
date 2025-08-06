@@ -5,7 +5,7 @@ export class PlayerState extends Schema {
   x: number = 100;
 
   @type("number")
-  y: number = 0; // Will be set dynamically when player joins
+  y: number = 200; // Will be set dynamically when player joins
 
   @type("number")
   velocityX: number = 0;
