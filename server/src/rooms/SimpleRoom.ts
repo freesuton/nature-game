@@ -7,6 +7,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
   maxClients = 4;
 
   private readonly MOVE_SPEED = 200; // pixels per second
+  private readonly JUMP_SPEED = 400; // pixels per second
   private readonly GROUND_Y = 500; // Adjusted to match visual ground position
   private readonly PLAYER_WIDTH = 32;
   private readonly PLAYER_HEIGHT = 48;
@@ -14,7 +15,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
 
   // Arcade Physics objects
   private physics!: ArcadePhysics;
-  private ground: any;
+  private platforms: any[] = [];
   private playerBodies: Map<string, any> = new Map();
 
   onCreate() {
@@ -28,8 +29,13 @@ export class SimpleRoom extends Room<SimpleGameState> {
       gravity: { x: 0, y: 600 } // Add realistic gravity
     });
 
-    // Create ground platform
-    this.ground = this.physics.add.staticBody(400, this.GROUND_Y, 800, this.GROUND_HEIGHT);
+    
+    // Create platforms
+    this.platforms.push(this.physics.add.staticBody(0, 500, 800, 2)); // Ground
+    this.platforms.push(this.physics.add.staticBody(600, 400, 200, 2)); // Platform 1
+    this.platforms.push(this.physics.add.staticBody(50, 250, 200, 2));  // Platform 2
+    this.platforms.push(this.physics.add.staticBody(750, 220, 200, 2)); // Platform 3
+    
 
     // Server physics update at 60 FPS
     this.setSimulationInterval(() => this.updatePhysics(), 1000/60);
@@ -45,8 +51,25 @@ export class SimpleRoom extends Room<SimpleGameState> {
       player.movingLeft = data.left || false;
       player.movingRight = data.right || false;
       
-      if (data.left || data.right) {
-        console.log(`Player ${client.sessionId} input: left=${data.left}, right=${data.right}`);
+      // Handle jumping - only allow jump if player is on ground
+      const playerBody = this.playerBodies.get(client.sessionId);
+      if (data.jump && playerBody) {
+        // Check if player is touching any platform
+        let canJump = false;
+        this.platforms.forEach(platform => {
+          if (playerBody.touching.down || playerBody.blocked.down) {
+            canJump = true;
+          }
+        });
+        
+        if (canJump) {
+          playerBody.setVelocityY(-this.JUMP_SPEED);
+          console.log(`Player ${client.sessionId} jumped!`);
+        }
+      }
+      
+      if (data.left || data.right || data.jump) {
+        console.log(`Player ${client.sessionId} input: left=${data.left}, right=${data.right}, jump=${data.jump}`);
       }
     });
   }
@@ -56,17 +79,16 @@ export class SimpleRoom extends Room<SimpleGameState> {
     
     const player = new SimplePlayerState();
     
-    // Create physics body for player
-    const playerBody = this.physics.add.body(400, this.GROUND_Y - this.GROUND_HEIGHT/2 - this.PLAYER_HEIGHT/2, this.PLAYER_WIDTH, this.PLAYER_HEIGHT);
+    // Create physics body for player at initial spawn position
+    const playerBody = this.physics.add.body(500, 400, 24, 48);
     this.playerBodies.set(client.sessionId, playerBody);
 
     // Set initial player state and physics body properties
-    playerBody.bounce.set(0.2, 0.2);
+    playerBody.bounce.set(0, 0);
     playerBody.collideWorldBounds = true;
     
-    // Set initial position (spawn in air)
-    playerBody.position.set(400, 200);
-    
+    // Update player state to match physics body position
+    // Store top-left position for client (origin 0,0)
     player.x = playerBody.x;
     player.y = playerBody.y;
     player.movingLeft = false;
@@ -107,21 +129,23 @@ export class SimpleRoom extends Room<SimpleGameState> {
         playerBody.setVelocityX(playerBody.velocity.x * 0.9);
       }
 
-      // Add collision between player and ground
-      this.physics.world.collide(playerBody, this.ground);
+      // Add collision between player and all platforms
+      this.platforms.forEach(platform => {
+        this.physics.world.collide(playerBody, platform);
+      });
 
       // Update player state from physics body
       player.x = playerBody.x;
       player.y = playerBody.y;
 
       // Keep player on screen
-      if (player.x < 25) {
-        player.x = 25;
-        playerBody.x = 25;
+      if (player.x < 0) {
+        player.x = 0;
+        playerBody.x = 0;
       }
-      if (player.x > 775) {
-        player.x = 775;
-        playerBody.x = 775;
+      if (player.x > 800) {
+        player.x = 800;
+        playerBody.x = 800;
       }
     });
   }

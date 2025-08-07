@@ -17,7 +17,7 @@ export const GameConfig: Types.Core.GameConfig = {
   physics: {
     default: 'arcade',
     arcade: {
-      gravity: { x: 0, y: 300 },
+      gravity: { x: 0, y: 600 }, // Match server gravity
       debug: true // Set to false in production
     }
   },

@@ -21,7 +21,9 @@ export class SimpleScene extends Phaser.Scene {
         default: 'arcade',
         arcade: {
           gravity: { x: 0, y: 600 },
-          debug: false
+          debug: true, // Match game config
+          width: 800,  // Match server size
+          height: 600
         }
       }
     });
@@ -30,19 +32,32 @@ export class SimpleScene extends Phaser.Scene {
   create() {
     console.log('SimpleScene created');
 
-    // Create ground with both visual and physics
-    const ground = this.add.rectangle(400, 500, 800, 100, 0x8B4513); // Brown ground visual
-    this.physics.add.existing(ground, true); // Add static physics to match server
+        // Create platforms array
+        const platforms: Phaser.Physics.Arcade.StaticBody[] = [];
+        
+        // Create platforms matching server
+        platforms.push(this.physics.add.staticBody(400, 500, 800, 2)); // Ground
+        platforms.push(this.physics.add.staticBody(600, 400, 200, 2)); // Platform 1
+        platforms.push(this.physics.add.staticBody(50, 250, 200, 2));  // Platform 2
+        platforms.push(this.physics.add.staticBody(750, 220, 200, 2)); // Platform 3
+        
+        // Add visuals for each platform
+        // platforms.forEach(platform => {
+        //     this.add.line(platform.x - platform.width/2, platform.y, 0, 0, platform.width, 0, 0x8B4513, 1).setLineWidth(2);
+        // });
+
+    // Add vertical ruler marks every 100 pixels
+    for (let y = 0; y <= 600; y += 100) {
+      this.add.line(0, y, 0, 0, 20, 0, 0x000000, 1).setLineWidth(2); // Ruler mark
+      this.add.text(25, y - 10, `${y}px`, { fontSize: '12px', color: '#000000' }); // Height label
+    }
+
+    // Add horizontal ruler marks every 100 pixels
+    for (let x = 0; x <= 800; x += 100) {
+      this.add.line(x, 0, 0, 0, 0, 20, 0x000000, 1).setLineWidth(2); // Ruler mark
+      this.add.text(x - 15, 25, `${x}px`, { fontSize: '12px', color: '#000000' }); // Width label
+    }
     
-    // Add UI text
-    this.add.text(10, 10, 'Simple Game - Server Physics', { 
-      fontSize: '16px', 
-      color: '#000000' 
-    });
-    this.add.text(10, 30, 'WASD to move, M for Menu', { 
-      fontSize: '14px', 
-      color: '#000000' 
-    });
 
     // Setup WASD input
     this.wasdKeys = this.input.keyboard!.addKeys('W,S,A,D') as any;
@@ -68,8 +83,8 @@ export class SimpleScene extends Phaser.Scene {
       this.room.state.players.onAdd((player: SimplePlayer, sessionId: string) => {
         console.log('Player added:', sessionId, 'at', player.x, player.y);
         
-        // Create player sprite (blue rectangle)
-        const sprite = this.add.rectangle(player.x, player.y, 32, 48, 0x0066ff);
+        // Create player sprite (blue rectangle) at server's initial position
+        const sprite = this.add.rectangle(player.x, player.y, 24, 48, 0x0066ff).setOrigin(0, 0);
         sprite.setStrokeStyle(2, 0xffffff);
         
         this.playerSprites.set(sessionId, sprite);
@@ -124,18 +139,14 @@ export class SimpleScene extends Phaser.Scene {
     const leftPressed = this.wasdKeys.A.isDown;
     const rightPressed = this.wasdKeys.D.isDown;
 
-    if (leftPressed || rightPressed) {
-      console.log(`Sending input: left=${leftPressed}, right=${rightPressed}`);
-      this.room.send('move', {
-        left: leftPressed,
-        right: rightPressed
-      });
-    } else {
-      this.room.send('move', {
-        left: false,
-        right: false
-      });
-    }
+    const jumpPressed = this.wasdKeys.W.isDown;
+
+    // Always send input state
+    this.room.send('move', {
+      left: leftPressed,
+      right: rightPressed,
+      jump: jumpPressed
+    });
   }
 
   private leaveRoom() {
