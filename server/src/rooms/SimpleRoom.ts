@@ -31,10 +31,10 @@ export class SimpleRoom extends Room<SimpleGameState> {
 
     
     // Create platforms
-    this.platforms.push(this.physics.add.staticBody(0, 500, 800, 2)); // Ground
-    this.platforms.push(this.physics.add.staticBody(600, 400, 200, 2)); // Platform 1
-    this.platforms.push(this.physics.add.staticBody(50, 250, 200, 2));  // Platform 2
-    this.platforms.push(this.physics.add.staticBody(750, 220, 200, 2)); // Platform 3
+    this.platforms.push(this.physics.add.staticBody(0, 500, 800, 20)); // Ground
+    this.platforms.push(this.physics.add.staticBody(600, 400, 200, 20)); // Platform 1
+    this.platforms.push(this.physics.add.staticBody(50, 250, 200, 20));  // Platform 2
+    this.platforms.push(this.physics.add.staticBody(750, 220, 200, 20)); // Platform 3
     
 
     // Server physics update at 60 FPS
@@ -80,7 +80,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
     const player = new SimplePlayerState();
     
     // Create physics body for player at initial spawn position
-    const playerBody = this.physics.add.body(500, 400, 24, 48);
+    const playerBody = this.physics.add.body(500, 400, 32, 48);
     this.playerBodies.set(client.sessionId, playerBody);
 
     // Set initial player state and physics body properties

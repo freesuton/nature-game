@@ -11,7 +11,7 @@ interface SimplePlayer {
 export class SimpleScene extends Phaser.Scene {
   private client!: Colyseus.Client;
   private room!: Colyseus.Room;
-  private playerSprites: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+  private playerSprites: Map<string, { sprite: Phaser.GameObjects.Sprite, debugRect: Phaser.GameObjects.Rectangle }> = new Map();
   private wasdKeys!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
 
   constructor() {
@@ -29,22 +29,26 @@ export class SimpleScene extends Phaser.Scene {
     });
   }
 
+  preload() {
+    // Load the dude sprite from Phaser labs
+    this.load.spritesheet('dude', 
+      'https://labs.phaser.io/assets/sprites/dude.png',
+      { frameWidth: 32, frameHeight: 48 }
+    );
+  }
+
   create() {
     console.log('SimpleScene created');
 
-        // Create platforms array
-        const platforms: Phaser.Physics.Arcade.StaticBody[] = [];
-        
-        // Create platforms matching server
-        platforms.push(this.physics.add.staticBody(400, 500, 800, 2)); // Ground
-        platforms.push(this.physics.add.staticBody(600, 400, 200, 2)); // Platform 1
-        platforms.push(this.physics.add.staticBody(50, 250, 200, 2));  // Platform 2
-        platforms.push(this.physics.add.staticBody(750, 220, 200, 2)); // Platform 3
-        
-        // Add visuals for each platform
-        // platforms.forEach(platform => {
-        //     this.add.line(platform.x - platform.width/2, platform.y, 0, 0, platform.width, 0, 0x8B4513, 1).setLineWidth(2);
-        // });
+    // Create platforms array
+    const platforms: Phaser.Physics.Arcade.StaticBody[] = [];
+    
+    // Create platforms matching server
+    platforms.push(this.physics.add.staticBody(0, 500, 800, 20)); // Ground
+    platforms.push(this.physics.add.staticBody(600, 400, 200, 20)); // Platform 1
+    platforms.push(this.physics.add.staticBody(50, 250, 200, 20));  // Platform 2
+    platforms.push(this.physics.add.staticBody(750, 220, 200, 20)); // Platform 3
+    
 
     // Add vertical ruler marks every 100 pixels
     for (let y = 0; y <= 600; y += 100) {
@@ -83,26 +87,63 @@ export class SimpleScene extends Phaser.Scene {
       this.room.state.players.onAdd((player: SimplePlayer, sessionId: string) => {
         console.log('Player added:', sessionId, 'at', player.x, player.y);
         
-        // Create player sprite (blue rectangle) at server's initial position
-        const sprite = this.add.rectangle(player.x, player.y, 24, 48, 0x0066ff).setOrigin(0, 0);
-        sprite.setStrokeStyle(2, 0xffffff);
+        // Create player sprite using the dude spritesheet
+        // setOrigin(0, 0) is important to match server's origin which is generated from left top corner
+        const sprite = this.add.sprite(player.x, player.y, 'dude', 0).setOrigin(0, 0);
         
-        this.playerSprites.set(sessionId, sprite);
+        // Add debug rectangle around character for testing collision boundaries
+        const debugRect = this.add.rectangle(player.x, player.y, 32, 48).setOrigin(0, 0);
+        debugRect.setStrokeStyle(2, 0xff0000, 0.8); // Red border with transparency
+        debugRect.setFillStyle(0x000000, 0); // Transparent fill
+        
+        // Create animations for the sprite
+        if (!this.anims.exists('left')) {
+          this.anims.create({
+            key: 'left',
+            frames: this.anims.generateFrameNumbers('dude', { start: 0, end: 3 }),
+            frameRate: 10,
+            repeat: -1
+          });
+        }
+        
+        if (!this.anims.exists('right')) {
+          this.anims.create({
+            key: 'right',
+            frames: this.anims.generateFrameNumbers('dude', { start: 5, end: 8 }),
+            frameRate: 10,
+            repeat: -1
+          });
+        }
+        
+        if (!this.anims.exists('turn')) {
+          this.anims.create({
+            key: 'turn',
+            frames: [{ key: 'dude', frame: 4 }],
+            frameRate: 20
+          });
+        }
+        
+        this.playerSprites.set(sessionId, { sprite, debugRect });
 
         // Listen for changes to this specific player
         (player as any).onChange(() => {
           console.log(`Player ${sessionId} position update: x=${player.x}, y=${player.y}, left=${player.movingLeft}, right=${player.movingRight}`);
           
-          // Update sprite position based on server data
-          sprite.setPosition(player.x, player.y);
+          // Get sprite and debug rectangle from map
+          const playerObjects = this.playerSprites.get(sessionId);
+          if (!playerObjects) return;
           
-          // Change color based on movement
+          // Update both sprite and debug rectangle positions
+          playerObjects.sprite.setPosition(player.x, player.y);
+          playerObjects.debugRect.setPosition(player.x, player.y);
+          
+          // Play animations based on movement
           if (player.movingLeft) {
-            sprite.setFillStyle(0xff0000); // Red when moving left
+            playerObjects.sprite.anims.play('left', true);
           } else if (player.movingRight) {
-            sprite.setFillStyle(0x00ff00); // Green when moving right
+            playerObjects.sprite.anims.play('right', true);
           } else {
-            sprite.setFillStyle(0x0066ff); // Blue when idle
+            playerObjects.sprite.anims.play('turn', true);
           }
         });
       });
@@ -111,9 +152,10 @@ export class SimpleScene extends Phaser.Scene {
       this.room.state.players.onRemove((_player: SimplePlayer, sessionId: string) => {
         console.log('Player removed:', sessionId);
         
-        const sprite = this.playerSprites.get(sessionId);
-        if (sprite) {
-          sprite.destroy();
+        const playerObjects = this.playerSprites.get(sessionId);
+        if (playerObjects) {
+          playerObjects.sprite.destroy();
+          playerObjects.debugRect.destroy();
           this.playerSprites.delete(sessionId);
         }
       });
