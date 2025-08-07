@@ -48,6 +48,8 @@ export class SimpleRoom extends Room<SimpleGameState> {
         return;
       }
 
+      
+
       player.movingLeft = data.left || false;
       player.movingRight = data.right || false;
       

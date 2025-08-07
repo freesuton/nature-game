@@ -43,6 +43,7 @@ export class SimpleScene extends Phaser.Scene {
     // Create platforms array
     const platforms: Phaser.Physics.Arcade.StaticBody[] = [];
     
+
     // Create platforms matching server
     platforms.push(this.physics.add.staticBody(0, 500, 800, 20)); // Ground
     platforms.push(this.physics.add.staticBody(600, 400, 200, 20)); // Platform 1
