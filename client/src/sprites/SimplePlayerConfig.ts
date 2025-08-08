@@ -3,9 +3,10 @@ import { Scene } from 'phaser';
 export class SimplePlayerConfig {
   public sprite: Phaser.GameObjects.Sprite;
   public debugRect: Phaser.GameObjects.Rectangle;
+  public nameText: Phaser.GameObjects.Text;
   private facingDirection: 'left' | 'right' = 'right';
 
-  constructor(scene: Scene, x: number, y: number, color?: number) {
+  constructor(scene: Scene, x: number, y: number, color?: number, name?: string) {
     // Create player sprite using the dude spritesheet
     // setOrigin(0, 0) is important to match server's origin which is generated from left top corner
     this.sprite = scene.add.sprite(x, y, 'dude', 0).setOrigin(0, 0);
@@ -19,6 +20,14 @@ export class SimplePlayerConfig {
     this.debugRect = scene.add.rectangle(x, y, 32, 48).setOrigin(0, 0);
     this.debugRect.setStrokeStyle(2, color || 0xff0000, 0.8); // Use provided color or default red
     this.debugRect.setFillStyle(0x000000, 0); // Transparent fill
+
+    // Add player name text above sprite
+    this.nameText = scene.add.text(x + 16, y - 10, name || 'Player', {
+      fontSize: '12px',
+      color: color ? `#${color.toString(16).padStart(6, '0')}` : '#FFFFFF',
+      stroke: '#000000',
+      strokeThickness: 2
+    }).setOrigin(0.5, 1); // Center horizontally, bottom align
 
     // Create animations for the sprite
     this.createAnimations(scene);
@@ -73,13 +82,15 @@ export class SimplePlayerConfig {
   }
 
   updatePosition(x: number, y: number): void {
-    // Update both sprite and debug rectangle positions
+    // Update sprite, debug rectangle, and name text positions
     this.sprite.setPosition(x, y);
     this.debugRect.setPosition(x, y);
+    this.nameText.setPosition(x + 16, y - 10);
   }
 
   destroy(): void {
     this.sprite.destroy();
     this.debugRect.destroy();
+    this.nameText.destroy();
   }
 }

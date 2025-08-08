@@ -18,6 +18,8 @@ export class SimpleScene extends Phaser.Scene {
   private currentMap: MapName = 'simple'; // Default map
   private mapInitialized = false;
   private mapNameText?: Phaser.GameObjects.Text;
+  private playerCountText?: Phaser.GameObjects.Text;
+  private playerColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'];
 
   constructor() {
     super({ 
@@ -79,6 +81,22 @@ export class SimpleScene extends Phaser.Scene {
       strokeThickness: 3,
       fontStyle: 'bold'
     }).setOrigin(0.5, 0.5); // Center the text
+
+    // Add player count display
+    this.playerCountText = this.add.text(16, 16, 'Players: 0', {
+      fontSize: '16px',
+      color: '#FFFFFF',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    }).setScrollFactor(0).setDepth(1000);
+
+    // Add quit button
+    this.add.text(400, 580, 'Press M for Menu', {
+      fontSize: '16px',
+      color: '#FFFFFF',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(1000);
     
 
     // Setup WASD input
@@ -98,12 +116,12 @@ export class SimpleScene extends Phaser.Scene {
     try {
       this.client = new Colyseus.Client('ws://localhost:2567');
       
-      // Create new room with random map selection
-      this.room = await this.client.create('simple', { 
+      // Join an existing room if possible, otherwise create a new one
+      this.room = await this.client.joinOrCreate('simple', {
         mapName: 'random'
       });
 
-      console.log('Connected to SimpleRoom');
+      console.log('Connected to SimpleRoom:', this.room.id);
 
       // Handle map info from server (this is the authoritative map)
       this.room.onMessage('mapInfo', (data) => {
@@ -124,10 +142,18 @@ export class SimpleScene extends Phaser.Scene {
       this.room.state.players.onAdd((player: SimplePlayer, sessionId: string) => {
         console.log('Player added:', sessionId, 'at', player.x, player.y);
         
-        // Create SimplePlayerConfig instance with optional color
-        const simplePlayer = new SimplePlayerConfig(this, player.x, player.y);
+        // Assign unique color and name based on player count
+        const playerIndex = this.players.size;
+        const playerColor = this.playerColors[playerIndex % this.playerColors.length];
+        const colorHex = parseInt(playerColor.replace('#', ''), 16);
+        const isMyPlayer = sessionId === this.room?.sessionId;
+        const playerName = isMyPlayer ? `You (P${playerIndex + 1})` : `Player ${playerIndex + 1}`;
+        
+        // Create SimplePlayerConfig instance with unique color and name
+        const simplePlayer = new SimplePlayerConfig(this, player.x, player.y, colorHex, playerName);
         
         this.players.set(sessionId, simplePlayer);
+        this.updatePlayerCount();
 
         // Listen for changes to this specific player
         (player as any).onChange(() => {
@@ -152,6 +178,7 @@ export class SimpleScene extends Phaser.Scene {
           simplePlayer.destroy();
           this.players.delete(sessionId);
         }
+        this.updatePlayerCount();
       });
 
       // Handle connection errors
@@ -265,5 +292,12 @@ export class SimpleScene extends Phaser.Scene {
       cave: '#696969'       // Gray
     };
     return nameColors[mapName] || '#FFFFFF';
+  }
+
+  private updatePlayerCount() {
+    if (this.playerCountText && this.room) {
+      const playerCount = Object.keys(this.room.state.players).length;
+      this.playerCountText.setText(`Players: ${playerCount}`);
+    }
   }
 }
