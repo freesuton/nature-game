@@ -20,6 +20,7 @@ export class SimpleScene extends Phaser.Scene {
   private mapNameText?: Phaser.GameObjects.Text;
   private playerCountText?: Phaser.GameObjects.Text;
   private playerColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'];
+  private platformVisuals: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() {
     super({ 
@@ -220,15 +221,18 @@ export class SimpleScene extends Phaser.Scene {
 
   shutdown() {
     this.leaveRoom();
+    // Reset map initialization flag and clear visuals so platforms will be rebuilt when rejoining
+    this.mapInitialized = false;
+    this.platformVisuals.forEach(visual => visual.destroy());
+    this.platformVisuals = [];
   }
 
   private createMapFromServerInfo(mapConfig: any) {
-    if (this.mapInitialized) {
-      console.log('Map already initialized, skipping...');
-      return;
-    }
-
-    console.log(`Creating map from server: ${mapConfig.name}`);
+    console.log(`Creating map from server: ${mapConfig.name}`, 'mapInitialized:', this.mapInitialized);
+    
+    // Clear existing platform visuals
+    this.platformVisuals.forEach(visual => visual.destroy());
+    this.platformVisuals = [];
     
     // Create platforms from server-provided map config
     const platforms: Phaser.Physics.Arcade.StaticBody[] = [];
@@ -244,17 +248,19 @@ export class SimpleScene extends Phaser.Scene {
       
       // Add visual representation for each platform with map-specific colors
       const color = this.getMapPlatformColor(this.currentMap, platformConfig.type);
-      this.add.rectangle(
+      const visual = this.add.rectangle(
         platformConfig.x, 
         platformConfig.y, 
         platformConfig.width, 
         platformConfig.height, 
         color
       ).setOrigin(0, 0);
+      
+      this.platformVisuals.push(visual);
     });
 
     this.mapInitialized = true;
-    console.log(`Map '${mapConfig.name}' created successfully!`);
+    console.log(`Map '${mapConfig.name}' created successfully! Platforms: ${this.platformVisuals.length}`);
   }
 
   private getMapPlatformColor(mapName: MapName, platformType: 'ground' | 'platform'): number {
