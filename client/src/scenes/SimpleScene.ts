@@ -1,6 +1,7 @@
 import * as Phaser from 'phaser';
 import * as Colyseus from 'colyseus.js';
 import { SimpleMapConfig, Platform, MapName, getRandomMapName } from '../../../MapConfig';
+import { SimplePlayerConfig } from '../sprites/SimplePlayerConfig';
 
 interface SimplePlayer {
   x: number;
@@ -12,7 +13,7 @@ interface SimplePlayer {
 export class SimpleScene extends Phaser.Scene {
   private client!: Colyseus.Client;
   private room!: Colyseus.Room;
-  private playerSprites: Map<string, { sprite: Phaser.GameObjects.Sprite, debugRect: Phaser.GameObjects.Rectangle }> = new Map();
+  private players: Map<string, SimplePlayerConfig> = new Map();
   private wasdKeys!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
   private currentMap: MapName = 'simple'; // Default map
   private mapInitialized = false;
@@ -123,64 +124,22 @@ export class SimpleScene extends Phaser.Scene {
       this.room.state.players.onAdd((player: SimplePlayer, sessionId: string) => {
         console.log('Player added:', sessionId, 'at', player.x, player.y);
         
-        // Create player sprite using the dude spritesheet
-        // setOrigin(0, 0) is important to match server's origin which is generated from left top corner
-        const sprite = this.add.sprite(player.x, player.y, 'dude', 0).setOrigin(0, 0);
+        // Create SimplePlayerConfig instance with optional color
+        const simplePlayer = new SimplePlayerConfig(this, player.x, player.y);
         
-        // Add debug rectangle around character for testing collision boundaries
-        const debugRect = this.add.rectangle(player.x, player.y, 32, 48).setOrigin(0, 0);
-        debugRect.setStrokeStyle(2, 0xff0000, 0.8); // Red border with transparency
-        debugRect.setFillStyle(0x000000, 0); // Transparent fill
-        
-        // Create animations for the sprite
-        if (!this.anims.exists('left')) {
-          this.anims.create({
-            key: 'left',
-            frames: this.anims.generateFrameNumbers('dude', { start: 0, end: 3 }),
-            frameRate: 10,
-            repeat: -1
-          });
-        }
-        
-        if (!this.anims.exists('right')) {
-          this.anims.create({
-            key: 'right',
-            frames: this.anims.generateFrameNumbers('dude', { start: 5, end: 8 }),
-            frameRate: 10,
-            repeat: -1
-          });
-        }
-        
-        if (!this.anims.exists('turn')) {
-          this.anims.create({
-            key: 'turn',
-            frames: [{ key: 'dude', frame: 4 }],
-            frameRate: 20
-          });
-        }
-        
-        this.playerSprites.set(sessionId, { sprite, debugRect });
+        this.players.set(sessionId, simplePlayer);
 
         // Listen for changes to this specific player
         (player as any).onChange(() => {
           console.log(`Player ${sessionId} position update: x=${player.x}, y=${player.y}, left=${player.movingLeft}, right=${player.movingRight}`);
           
-          // Get sprite and debug rectangle from map
-          const playerObjects = this.playerSprites.get(sessionId);
-          if (!playerObjects) return;
+          // Get SimplePlayerConfig instance
+          const simplePlayer = this.players.get(sessionId);
+          if (!simplePlayer) return;
           
-          // Update both sprite and debug rectangle positions
-          playerObjects.sprite.setPosition(player.x, player.y);
-          playerObjects.debugRect.setPosition(player.x, player.y);
-          
-          // Play animations based on movement
-          if (player.movingLeft) {
-            playerObjects.sprite.anims.play('left', true);
-          } else if (player.movingRight) {
-            playerObjects.sprite.anims.play('right', true);
-          } else {
-            playerObjects.sprite.anims.play('turn', true);
-          }
+          // Update position and movement
+          simplePlayer.updatePosition(player.x, player.y);
+          simplePlayer.updateMovement(player.movingLeft, player.movingRight);
         });
       });
 
@@ -188,11 +147,10 @@ export class SimpleScene extends Phaser.Scene {
       this.room.state.players.onRemove((_player: SimplePlayer, sessionId: string) => {
         console.log('Player removed:', sessionId);
         
-        const playerObjects = this.playerSprites.get(sessionId);
-        if (playerObjects) {
-          playerObjects.sprite.destroy();
-          playerObjects.debugRect.destroy();
-          this.playerSprites.delete(sessionId);
+        const simplePlayer = this.players.get(sessionId);
+        if (simplePlayer) {
+          simplePlayer.destroy();
+          this.players.delete(sessionId);
         }
       });
 
