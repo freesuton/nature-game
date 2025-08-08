@@ -1,5 +1,6 @@
 import * as Phaser from 'phaser';
 import * as Colyseus from 'colyseus.js';
+import { SimpleMapConfig, Platform, MapName, getRandomMapName } from '../../../MapConfig';
 
 interface SimplePlayer {
   x: number;
@@ -13,6 +14,9 @@ export class SimpleScene extends Phaser.Scene {
   private room!: Colyseus.Room;
   private playerSprites: Map<string, { sprite: Phaser.GameObjects.Sprite, debugRect: Phaser.GameObjects.Rectangle }> = new Map();
   private wasdKeys!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
+  private currentMap: MapName = 'simple'; // Default map
+  private mapInitialized = false;
+  private mapNameText?: Phaser.GameObjects.Text;
 
   constructor() {
     super({ 
@@ -20,10 +24,10 @@ export class SimpleScene extends Phaser.Scene {
       physics: {
         default: 'arcade',
         arcade: {
-          gravity: { x: 0, y: 600 },
-          debug: true, // Match game config
-          width: 800,  // Match server size
-          height: 600
+          gravity: SimpleMapConfig.gravity,
+          debug: true,
+          width: SimpleMapConfig.width,
+          height: SimpleMapConfig.height
         }
       }
     });
@@ -40,15 +44,18 @@ export class SimpleScene extends Phaser.Scene {
   create() {
     console.log('SimpleScene created');
 
-    // Create platforms array
-    const platforms: Phaser.Physics.Arcade.StaticBody[] = [];
+    // Handle map selection from scene data
+    const sceneData = this.scene.settings.data as any;
+    if (sceneData?.mapName === 'random') {
+      this.currentMap = getRandomMapName();
+      console.log(`Client selected random map: ${this.currentMap}`);
+    } else if (sceneData?.mapName) {
+      this.currentMap = sceneData.mapName as MapName;
+    }
     
-
-    // Create platforms matching server
-    platforms.push(this.physics.add.staticBody(0, 500, 800, 20)); // Ground
-    platforms.push(this.physics.add.staticBody(600, 400, 200, 20)); // Platform 1
-    platforms.push(this.physics.add.staticBody(50, 250, 200, 20));  // Platform 2
-    platforms.push(this.physics.add.staticBody(750, 220, 200, 20)); // Platform 3
+    // Don't create map immediately - wait for server confirmation
+    // This ensures client and server use the same map
+    console.log(`Client requesting map: ${this.currentMap}`);
     
 
     // Add vertical ruler marks every 100 pixels
@@ -62,6 +69,15 @@ export class SimpleScene extends Phaser.Scene {
       this.add.line(x, 0, 0, 0, 0, 20, 0x000000, 1).setLineWidth(2); // Ruler mark
       this.add.text(x - 15, 25, `${x}px`, { fontSize: '12px', color: '#000000' }); // Width label
     }
+
+    // Add map name display at top center (will be updated when map loads)
+    this.mapNameText = this.add.text(400, 50, 'Loading Map...', {
+      fontSize: '24px',
+      color: '#FFFFFF',
+      stroke: '#000000',
+      strokeThickness: 3,
+      fontStyle: 'bold'
+    }).setOrigin(0.5, 0.5); // Center the text
     
 
     // Setup WASD input
@@ -80,9 +96,28 @@ export class SimpleScene extends Phaser.Scene {
   private async connectToServer() {
     try {
       this.client = new Colyseus.Client('ws://localhost:2567');
-      this.room = await this.client.joinOrCreate('simple');
+      
+      // Create new room with random map selection
+      this.room = await this.client.create('simple', { 
+        mapName: 'random'
+      });
 
       console.log('Connected to SimpleRoom');
+
+      // Handle map info from server (this is the authoritative map)
+      this.room.onMessage('mapInfo', (data) => {
+        console.log('Received map info from server:', data);
+        this.currentMap = data.mapName;
+        this.createMapFromServerInfo(data.mapConfig);
+        
+        // Update map name display with map-specific styling
+        if (this.mapNameText) {
+          const mapDisplayName = this.getMapDisplayName(data.mapName);
+          const mapColor = this.getMapNameColor(data.mapName);
+          this.mapNameText.setText(mapDisplayName);
+          this.mapNameText.setColor(mapColor);
+        }
+      });
 
       // When a player is added
       this.room.state.players.onAdd((player: SimplePlayer, sessionId: string) => {
@@ -200,5 +235,77 @@ export class SimpleScene extends Phaser.Scene {
 
   shutdown() {
     this.leaveRoom();
+  }
+
+  private createMapFromServerInfo(mapConfig: any) {
+    if (this.mapInitialized) {
+      console.log('Map already initialized, skipping...');
+      return;
+    }
+
+    console.log(`Creating map from server: ${mapConfig.name}`);
+    
+    // Create platforms from server-provided map config
+    const platforms: Phaser.Physics.Arcade.StaticBody[] = [];
+    
+    mapConfig.platforms.forEach((platformConfig: Platform) => {
+      const platform = this.physics.add.staticBody(
+        platformConfig.x, 
+        platformConfig.y, 
+        platformConfig.width, 
+        platformConfig.height
+      );
+      platforms.push(platform);
+      
+      // Add visual representation for each platform with map-specific colors
+      const color = this.getMapPlatformColor(this.currentMap, platformConfig.type);
+      this.add.rectangle(
+        platformConfig.x, 
+        platformConfig.y, 
+        platformConfig.width, 
+        platformConfig.height, 
+        color
+      ).setOrigin(0, 0);
+    });
+
+    this.mapInitialized = true;
+    console.log(`Map '${mapConfig.name}' created successfully!`);
+  }
+
+  private getMapPlatformColor(mapName: MapName, platformType: 'ground' | 'platform'): number {
+    const mapColors = {
+      simple: {
+        ground: 0x8B4513,     // Brown
+        platform: 0x654321   // Dark brown
+      },
+      forest: {
+        ground: 0x228B22,     // Forest green
+        platform: 0x8B4513   // Brown wood
+      },
+      cave: {
+        ground: 0x696969,     // Dark gray
+        platform: 0x2F4F4F   // Dark slate gray
+      }
+    };
+
+    return mapColors[mapName][platformType];
+  }
+
+  private getMapDisplayName(mapName: MapName): string {
+    const displayNames = {
+      simple: '🏠 Simple Map',
+      forest: '🌲 Forest Map', 
+      cave: '🏔️ Cave Map'
+    };
+    return displayNames[mapName] || mapName;
+  }
+
+  private getMapNameColor(mapName: MapName): string {
+    const nameColors = {
+      simple: '#8B4513',    // Brown
+      forest: '#228B22',    // Forest green
+      cave: '#696969'       // Gray
+    };
+    return nameColors[mapName] || '#FFFFFF';
   }
 }

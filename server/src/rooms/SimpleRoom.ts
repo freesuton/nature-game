@@ -2,39 +2,58 @@ import { Room, Client } from '@colyseus/core';
 import { SimpleGameState } from './schema/SimpleGameState';
 import { SimplePlayerState } from './schema/SimplePlayerState';
 import { ArcadePhysics } from 'arcade-physics';
+import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName } from '../../../MapConfig';
 
 export class SimpleRoom extends Room<SimpleGameState> {
   maxClients = 4;
 
   private readonly MOVE_SPEED = 200; // pixels per second
   private readonly JUMP_SPEED = 400; // pixels per second
-  private readonly GROUND_Y = 500; // Adjusted to match visual ground position
   private readonly PLAYER_WIDTH = 32;
   private readonly PLAYER_HEIGHT = 48;
-  private readonly GROUND_HEIGHT = 100;
 
   // Arcade Physics objects
   private physics!: ArcadePhysics;
   private platforms: any[] = [];
   private playerBodies: Map<string, any> = new Map();
+  private currentMap: MapName = 'simple'; // Default map
 
-  onCreate() {
-    console.log("SimpleRoom created!");
+  onCreate(options: any = {}) {
+    console.log("SimpleRoom created with options:", options);
     this.setState(new SimpleGameState());
 
-    // Initialize Arcade Physics
+    // Map selection logic
+    if (options?.mapName === 'random' || !options?.mapName) {
+      // Select random map
+      this.currentMap = getRandomMapName();
+      console.log(`Random map selected: ${this.currentMap} (from ${Object.keys(Maps).join(', ')})`);
+    } else if (options?.mapName && options.mapName in Maps) {
+      // Use specified map
+      this.currentMap = options.mapName as MapName;
+      console.log(`Specific map requested: ${this.currentMap}`);
+    }
+
+    const mapConfig = getMapConfig(this.currentMap);
+    console.log(`Loading map: ${mapConfig.name}`);
+
+    // Initialize Arcade Physics using selected map config
     this.physics = new ArcadePhysics({
-      width: 800,
-      height: 600,
-      gravity: { x: 0, y: 600 } // Add realistic gravity
+      width: mapConfig.width,
+      height: mapConfig.height,
+      gravity: mapConfig.gravity
     });
 
-    
-    // Create platforms
-    this.platforms.push(this.physics.add.staticBody(0, 500, 800, 20)); // Ground
-    this.platforms.push(this.physics.add.staticBody(600, 400, 200, 20)); // Platform 1
-    this.platforms.push(this.physics.add.staticBody(50, 250, 200, 20));  // Platform 2
-    this.platforms.push(this.physics.add.staticBody(750, 220, 200, 20)); // Platform 3
+    // Create platforms from selected map config
+    mapConfig.platforms.forEach((platformConfig: Platform) => {
+      this.platforms.push(
+        this.physics.add.staticBody(
+          platformConfig.x, 
+          platformConfig.y, 
+          platformConfig.width, 
+          platformConfig.height
+        )
+      );
+    });
     
 
     // Server physics update at 60 FPS
@@ -78,6 +97,12 @@ export class SimpleRoom extends Room<SimpleGameState> {
 
   onJoin(client: Client) {
     console.log(`Player ${client.sessionId} joined SimpleRoom!`);
+    
+    // Send the current map info to the client
+    client.send('mapInfo', { 
+      mapName: this.currentMap,
+      mapConfig: getMapConfig(this.currentMap)
+    });
     
     const player = new SimplePlayerState();
     
