@@ -5,4 +5,6 @@ export class SimplePlayerState extends Schema {
   @type("number") y: number = 500;
   @type("boolean") movingLeft: boolean = false;
   @type("boolean") movingRight: boolean = false;
+  @type("string") color: string = "#FF6B6B"; // Store player color as hex string
+  @type("string") facingDirection: string = "right"; // Store player's facing direction ('left' or 'right')
 }

@@ -63,15 +63,13 @@ export class SimplePlayerConfig {
   }
 
   updateMovement(movingLeft: boolean, movingRight: boolean): void {
-    // Play animations based on movement, stop and show facing direction when stopped
+    // Play animations based on movement (facing direction comes from server)
     if (movingLeft) {
       this.sprite.anims.play('left', true);
-      this.facingDirection = 'left'; // Update facing direction
     } else if (movingRight) {
       this.sprite.anims.play('right', true);
-      this.facingDirection = 'right'; // Update facing direction
     } else {
-      // Stop animation and show static facing frame
+      // Stop animation and show static facing frame based on server-provided direction
       this.sprite.anims.stop();
       if (this.facingDirection === 'left') {
         this.sprite.setFrame(0); // Left-facing static frame
@@ -86,6 +84,20 @@ export class SimplePlayerConfig {
     this.sprite.setPosition(x, y);
     this.debugRect.setPosition(x, y);
     this.nameText.setPosition(x + 16, y - 10);
+  }
+
+  updateFacingDirection(direction: string): void {
+    // Update the facing direction from server
+    this.facingDirection = direction as 'left' | 'right';
+    
+    // If not currently playing a movement animation, update the static frame
+    if (!this.sprite.anims.isPlaying) {
+      if (this.facingDirection === 'left') {
+        this.sprite.setFrame(0); // Left-facing static frame
+      } else {
+        this.sprite.setFrame(5); // Right-facing static frame
+      }
+    }
   }
 
   destroy(): void {

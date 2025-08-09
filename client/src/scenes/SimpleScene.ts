@@ -8,6 +8,8 @@ interface SimplePlayer {
   y: number;
   movingLeft: boolean;
   movingRight: boolean;
+  color: string;
+  facingDirection: string;
 }
 
 export class SimpleScene extends Phaser.Scene {
@@ -19,7 +21,6 @@ export class SimpleScene extends Phaser.Scene {
   private mapInitialized = false;
   private mapNameText?: Phaser.GameObjects.Text;
   private playerCountText?: Phaser.GameObjects.Text;
-  private playerColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'];
   private platformVisuals: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() {
@@ -141,16 +142,15 @@ export class SimpleScene extends Phaser.Scene {
 
       // When a player is added
       this.room.state.players.onAdd((player: SimplePlayer, sessionId: string) => {
-        console.log('Player added:', sessionId, 'at', player.x, player.y);
+        console.log('Player added:', sessionId, 'at', player.x, player.y, 'color:', player.color);
         
-        // Assign unique color and name based on player count
-        const playerIndex = this.players.size;
-        const playerColor = this.playerColors[playerIndex % this.playerColors.length];
-        const colorHex = parseInt(playerColor.replace('#', ''), 16);
+        // Use server-provided color
+        const colorHex = parseInt(player.color.replace('#', ''), 16);
         const isMyPlayer = sessionId === this.room?.sessionId;
-        const playerName = isMyPlayer ? `You (P${playerIndex + 1})` : `Player ${playerIndex + 1}`;
+        const playerIndex = this.players.size + 1;
+        const playerName = isMyPlayer ? `You (P${playerIndex})` : `Player ${playerIndex}`;
         
-        // Create SimplePlayerConfig instance with unique color and name
+        // Create SimplePlayerConfig instance with server-provided color and name
         const simplePlayer = new SimplePlayerConfig(this, player.x, player.y, colorHex, playerName);
         
         this.players.set(sessionId, simplePlayer);
@@ -158,15 +158,16 @@ export class SimpleScene extends Phaser.Scene {
 
         // Listen for changes to this specific player
         (player as any).onChange(() => {
-          console.log(`Player ${sessionId} position update: x=${player.x}, y=${player.y}, left=${player.movingLeft}, right=${player.movingRight}`);
+          console.log(`Player ${sessionId} update: x=${player.x}, y=${player.y}, left=${player.movingLeft}, right=${player.movingRight}, facing=${player.facingDirection}`);
           
           // Get SimplePlayerConfig instance
           const simplePlayer = this.players.get(sessionId);
           if (!simplePlayer) return;
           
-          // Update position and movement
+          // Update position, movement, and facing direction
           simplePlayer.updatePosition(player.x, player.y);
           simplePlayer.updateMovement(player.movingLeft, player.movingRight);
+          simplePlayer.updateFacingDirection(player.facingDirection);
         });
       });
 

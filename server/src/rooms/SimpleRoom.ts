@@ -17,6 +17,9 @@ export class SimpleRoom extends Room<SimpleGameState> {
   private platforms: any[] = [];
   private playerBodies: Map<string, any> = new Map();
   private currentMap: MapName = 'simple'; // Default map
+  
+  // Player color options
+  private readonly playerColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'];
 
   onCreate(options: any = {}) {
     console.log("SimpleRoom created with options:", options);
@@ -72,6 +75,14 @@ export class SimpleRoom extends Room<SimpleGameState> {
       player.movingLeft = data.left || false;
       player.movingRight = data.right || false;
       
+      // Update facing direction based on movement
+      if (data.left) {
+        player.facingDirection = "left";
+      } else if (data.right) {
+        player.facingDirection = "right";
+      }
+      // Note: If not moving, keep the current facing direction
+      
       // Handle jumping - only allow jump if player is on ground
       const playerBody = this.playerBodies.get(client.sessionId);
       if (data.jump && playerBody) {
@@ -106,6 +117,9 @@ export class SimpleRoom extends Room<SimpleGameState> {
     
     const player = new SimplePlayerState();
     
+    // Assign a unique color to the new player
+    const assignedColor = this.getUniquePlayerColor();
+    
     // Create physics body for player at initial spawn position
     const playerBody = this.physics.add.body(500, 400, 32, 48);
     this.playerBodies.set(client.sessionId, playerBody);
@@ -114,15 +128,17 @@ export class SimpleRoom extends Room<SimpleGameState> {
     playerBody.bounce.set(0, 0);
     playerBody.collideWorldBounds = true;
     
-    // Update player state to match physics body position
+    // Update player state to match physics body position and assign unique color
     // Store top-left position for client (origin 0,0)
     player.x = playerBody.x;
     player.y = playerBody.y;
     player.movingLeft = false;
     player.movingRight = false;
+    player.color = assignedColor;
+    player.facingDirection = "right"; // Default facing direction
     
     this.state.players.set(client.sessionId, player);
-    console.log(`Player spawned at x=${player.x}, y=${player.y}`);
+    console.log(`Player spawned at x=${player.x}, y=${player.y} with unique color=${player.color}`);
   }
 
   onLeave(client: Client) {
@@ -175,5 +191,34 @@ export class SimpleRoom extends Room<SimpleGameState> {
         playerBody.x = 800;
       }
     });
+  }
+
+  private getUniquePlayerColor(): string {
+    // Get currently used colors by existing players
+    const usedColors = new Set<string>();
+    this.state.players.forEach((existingPlayer) => {
+      usedColors.add(existingPlayer.color);
+    });
+    
+    // Find the first available color that's not already used
+    let assignedColor = this.playerColors[0]; // Default fallback
+    for (const color of this.playerColors) {
+      if (!usedColors.has(color)) {
+        assignedColor = color;
+        break;
+      }
+    }
+    
+    // If all colors are used (more than 4 players), cycle through colors
+    if (usedColors.has(assignedColor) && usedColors.size >= this.playerColors.length) {
+      const playerIndex = this.state.players.size;
+      assignedColor = this.playerColors[playerIndex % this.playerColors.length];
+      console.log(`All ${this.playerColors.length} colors are in use! Cycling back to color: ${assignedColor}`);
+    }
+    
+    console.log(`Used colors: [${Array.from(usedColors).join(', ')}]`);
+    console.log(`Assigning player color: ${assignedColor} (unique: ${!usedColors.has(assignedColor)})`);
+    
+    return assignedColor;
   }
 }
