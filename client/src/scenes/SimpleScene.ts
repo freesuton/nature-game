@@ -11,6 +11,7 @@ interface SimplePlayer {
   color: string;
   facingDirection: string;
   hasGun: boolean;
+  isDead: boolean;
 }
 
 interface SimpleGun {
@@ -20,13 +21,25 @@ interface SimpleGun {
   isPickedUp: boolean;
 }
 
+interface SimpleBullet {
+  id: string;
+  ownerId: string;
+  x: number;
+  y: number;
+  velocityX: number;
+  velocityY: number;
+  direction: string;
+}
+
 export class SimpleScene extends Phaser.Scene {
   private client!: Colyseus.Client;
   private room!: Colyseus.Room;
   private players: Map<string, SimplePlayerConfig> = new Map();
   private guns: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private gunLabels: Map<string, Phaser.GameObjects.Text> = new Map();
+  private bullets: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private wasdKeys!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
+  private jKey!: Phaser.Input.Keyboard.Key;
   private currentMap: MapName = 'simple'; // Default map
   private mapInitialized = false;
   private mapNameText?: Phaser.GameObjects.Text;
@@ -111,6 +124,14 @@ export class SimpleScene extends Phaser.Scene {
       padding: { x: 8, y: 4 }
     }).setScrollFactor(0).setDepth(1000);
 
+    // Add shooting instruction
+    this.add.text(400, 560, 'Press J to Shoot (with gun)', {
+      fontSize: '16px',
+      color: '#FFFF00',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(1000);
+
     // Add quit button
     this.add.text(400, 580, 'Press M for Menu', {
       fontSize: '16px',
@@ -122,6 +143,9 @@ export class SimpleScene extends Phaser.Scene {
 
     // Setup WASD input
     this.wasdKeys = this.input.keyboard!.addKeys('W,S,A,D') as any;
+
+    // Setup J key for shooting
+    this.jKey = this.input.keyboard!.addKey('J');
 
     // Menu key
     this.input.keyboard!.on('keydown-M', () => {
@@ -177,7 +201,7 @@ export class SimpleScene extends Phaser.Scene {
 
         // Listen for changes to this specific player
         (player as any).onChange(() => {
-          console.log(`Player ${sessionId} update: x=${player.x}, y=${player.y}, left=${player.movingLeft}, right=${player.movingRight}, facing=${player.facingDirection}, hasGun=${player.hasGun}`);
+          console.log(`Player ${sessionId} update: x=${player.x}, y=${player.y}, left=${player.movingLeft}, right=${player.movingRight}, facing=${player.facingDirection}, hasGun=${player.hasGun}, isDead=${player.isDead}`);
           
           // Get SimplePlayerConfig instance
           const simplePlayer = this.players.get(sessionId);
@@ -188,11 +212,28 @@ export class SimpleScene extends Phaser.Scene {
           simplePlayer.updateMovement(player.movingLeft, player.movingRight);
           simplePlayer.updateFacingDirection(player.facingDirection);
           
-          // Update name text to show gun status
+          // Update death state visual while preserving original color
+          if (player.isDead) {
+            simplePlayer.sprite.setTint(0x808080); // Gray tint for dead players
+            simplePlayer.sprite.setAlpha(0.5); // Semi-transparent
+          } else {
+            simplePlayer.sprite.setTint(colorHex); // Restore original color
+            simplePlayer.sprite.setAlpha(1.0);
+          }
+          
+          // Update name text to show gun and death status
           const baseName = isMyPlayer ? `You (P${playerIndex})` : `Player ${playerIndex}`;
           const gunStatus = player.hasGun ? ' [GUN]' : '';
-          simplePlayer.nameText.setText(baseName + gunStatus);
-          simplePlayer.nameText.setColor(player.hasGun ? '#00FF00' : '#FFFFFF'); // Green if has gun
+          const deathStatus = player.isDead ? ' [DEAD]' : '';
+          simplePlayer.nameText.setText(baseName + gunStatus + deathStatus);
+          
+          if (player.isDead) {
+            simplePlayer.nameText.setColor('#FF0000'); // Red if dead
+          } else if (player.hasGun) {
+            simplePlayer.nameText.setColor('#00FF00'); // Green if has gun
+          } else {
+            simplePlayer.nameText.setColor('#FFFFFF'); // White if normal
+          }
           
           // Update global gun status display
           this.updateGunStatusDisplay();
@@ -262,6 +303,35 @@ export class SimpleScene extends Phaser.Scene {
         }
       });
 
+      // When a bullet is added
+      this.room.state.bullets.onAdd((bullet: SimpleBullet, bulletId: string) => {
+        console.log('Bullet added:', bulletId, 'at', bullet.x, bullet.y);
+        
+        // Create visual bullet (yellow rectangle)
+        const bulletRect = this.add.rectangle(bullet.x, bullet.y, 8, 4, 0xFFFF00);
+        bulletRect.setOrigin(0, 0.5);
+        this.bullets.set(bulletId, bulletRect);
+
+        // Listen for bullet position changes
+        (bullet as any).onChange(() => {
+          const bulletRect = this.bullets.get(bulletId);
+          if (bulletRect) {
+            bulletRect.setPosition(bullet.x, bullet.y);
+          }
+        });
+      });
+
+      // When a bullet is removed
+      this.room.state.bullets.onRemove((_bullet: SimpleBullet, bulletId: string) => {
+        console.log('Bullet removed:', bulletId);
+        
+        const bulletRect = this.bullets.get(bulletId);
+        if (bulletRect) {
+          bulletRect.destroy();
+          this.bullets.delete(bulletId);
+        }
+      });
+
       // Handle connection errors
       this.room.onError((code: number, message?: string) => {
         console.error('Room error:', code, message);
@@ -291,6 +361,11 @@ export class SimpleScene extends Phaser.Scene {
       right: rightPressed,
       jump: jumpPressed
     });
+
+    // Handle shooting input (J key)
+    if (Phaser.Input.Keyboard.JustDown(this.jKey)) {
+      this.room.send('shoot', {});
+    }
   }
 
   private leaveRoom() {
@@ -306,11 +381,13 @@ export class SimpleScene extends Phaser.Scene {
     this.platformVisuals.forEach(visual => visual.destroy());
     this.platformVisuals = [];
     
-    // Clean up guns and labels
+    // Clean up guns, labels, and bullets
     this.guns.forEach(gun => gun.destroy());
     this.guns.clear();
     this.gunLabels.forEach(label => label.destroy());
     this.gunLabels.clear();
+    this.bullets.forEach(bullet => bullet.destroy());
+    this.bullets.clear();
   }
 
   private createMapFromServerInfo(mapConfig: any) {
@@ -399,7 +476,7 @@ export class SimpleScene extends Phaser.Scene {
     // Check if any player has the gun
     let gunHolder: string | null = null;
     this.room.state.players.forEach((player: SimplePlayer, sessionId: string) => {
-      if (player.hasGun) {
+      if (player.hasGun && !player.isDead) {
         // Find the player index for display
         const playerIndex = Array.from(this.room.state.players.keys()).indexOf(sessionId) + 1;
         const isMyPlayer = sessionId === this.room.sessionId;

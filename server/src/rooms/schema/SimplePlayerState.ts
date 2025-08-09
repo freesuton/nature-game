@@ -8,4 +8,5 @@ export class SimplePlayerState extends Schema {
   @type("string") color: string = "#FF6B6B"; // Store player color as hex string
   @type("string") facingDirection: string = "right"; // Store player's facing direction ('left' or 'right')
   @type("boolean") hasGun: boolean = false; // Track if player has a gun
+  @type("boolean") isDead: boolean = false; // Track if player is dead
 }

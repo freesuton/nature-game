@@ -2,6 +2,7 @@ import { Room, Client } from '@colyseus/core';
 import { SimpleGameState } from './schema/SimpleGameState';
 import { SimplePlayerState } from './schema/SimplePlayerState';
 import { GunState } from './schema/GunState';
+import { BulletState } from './schema/BulletState';
 import { ArcadePhysics } from 'arcade-physics';
 import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName } from '../../../MapConfig';
 
@@ -12,6 +13,9 @@ export class SimpleRoom extends Room<SimpleGameState> {
   private readonly JUMP_SPEED = 400; // pixels per second
   private readonly PLAYER_WIDTH = 32;
   private readonly PLAYER_HEIGHT = 48;
+  private readonly BULLET_SPEED = 400; // pixels per second
+  private readonly BULLET_GRAVITY = 300; // pixels per second squared
+  private readonly BULLET_INITIAL_ANGLE = -100; // Initial upward velocity (negative = up)
 
   // Arcade Physics objects
   private physics!: ArcadePhysics;
@@ -107,6 +111,29 @@ export class SimpleRoom extends Room<SimpleGameState> {
         console.log(`Player ${client.sessionId} input: left=${data.left}, right=${data.right}, jump=${data.jump}`);
       }
     });
+
+    // Handle shooting
+    this.onMessage("shoot", (client, data) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || !player.hasGun || player.isDead) {
+        console.log(`Cannot shoot: player ${client.sessionId} - hasGun: ${player?.hasGun}, isDead: ${player?.isDead}`);
+        return;
+      }
+
+      // Create bullet
+      const bulletId = `bullet_${client.sessionId}_${Date.now()}`;
+      const bullet = new BulletState();
+      bullet.id = bulletId;
+      bullet.ownerId = client.sessionId;
+      bullet.direction = player.facingDirection;
+      bullet.x = player.x + (player.facingDirection === 'right' ? 32 : -8);
+      bullet.y = player.y + 20;
+      bullet.velocityX = player.facingDirection === 'right' ? this.BULLET_SPEED : -this.BULLET_SPEED;
+      bullet.velocityY = this.BULLET_INITIAL_ANGLE; // Start with upward angle
+
+      this.state.bullets.set(bulletId, bullet);
+      console.log(`Player ${client.sessionId} shot bullet with gun`);
+    });
   }
 
   onJoin(client: Client) {
@@ -140,6 +167,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
     player.color = assignedColor;
     player.facingDirection = "right"; // Default facing direction
     player.hasGun = false; // No gun initially
+    player.isDead = false; // Alive by default
     
     this.state.players.set(client.sessionId, player);
     console.log(`Player spawned at x=${player.x}, y=${player.y} with unique color=${player.color}`);
@@ -162,11 +190,14 @@ export class SimpleRoom extends Room<SimpleGameState> {
     // Step the physics simulation forward
     this.physics.world.update(16.666, 16.666); // Update at 60fps (1000/60 ≈ 16.666ms)
 
-    this.state.players.forEach((player, sessionId) => {
-      const playerBody = this.playerBodies.get(sessionId);
-      if (!playerBody) return;
+          this.state.players.forEach((player, sessionId) => {
+        const playerBody = this.playerBodies.get(sessionId);
+        if (!playerBody) return;
 
-      // Apply horizontal movement forces
+        // Skip movement if player is dead
+        if (player.isDead) return;
+
+        // Apply horizontal movement forces
       if (player.movingLeft) {
         playerBody.setVelocityX(-this.MOVE_SPEED);
       } else if (player.movingRight) {
@@ -198,6 +229,9 @@ export class SimpleRoom extends Room<SimpleGameState> {
 
     // Check gun pickups
     this.checkGunPickups();
+
+    // Update bullets
+    this.updateBullets();
   }
 
   private getUniquePlayerColor(): string {
@@ -255,7 +289,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
       if (gun.isPickedUp) return; // Skip already picked up guns
 
       this.state.players.forEach((player, playerId) => {
-        if (player.hasGun) return; // Skip players who already have a gun
+        if (player.hasGun || player.isDead) return; // Skip players who already have a gun or are dead
 
         // Check collision between player and gun (simple distance check)
         const distance = Math.sqrt(
@@ -270,6 +304,48 @@ export class SimpleRoom extends Room<SimpleGameState> {
           console.log(`Player ${playerId} picked up gun ${gunId}`);
         }
       });
+    });
+  }
+
+  private updateBullets() {
+    const bulletsToRemove: string[] = [];
+    const deltaTime = 16.666 / 1000; // Convert frame time to seconds
+
+    this.state.bullets.forEach((bullet, bulletId) => {
+      // Apply gravity to vertical velocity
+      bullet.velocityY += this.BULLET_GRAVITY * deltaTime;
+      
+      // Update bullet position with both horizontal and vertical movement
+      bullet.x += bullet.velocityX * deltaTime;
+      bullet.y += bullet.velocityY * deltaTime;
+
+      // Remove bullets that are off-screen or hit the ground
+      if (bullet.x < -50 || bullet.x > 850 || bullet.y > 650) {
+        bulletsToRemove.push(bulletId);
+        return;
+      }
+
+      // Check collision with players (simple AABB collision)
+      this.state.players.forEach((player, playerId) => {
+        if (playerId === bullet.ownerId || player.isDead) return; // Skip bullet owner and dead players
+
+        // Simple collision detection
+        if (bullet.x >= player.x && bullet.x <= player.x + 32 && 
+            bullet.y >= player.y && bullet.y <= player.y + 48) {
+          // Player is hit - they die
+          player.isDead = true;
+          if (player.hasGun) {
+            player.hasGun = false; // Drop gun when dead
+          }
+          console.log(`Player ${playerId} was killed by ${bullet.ownerId}'s bullet!`);
+          bulletsToRemove.push(bulletId);
+        }
+      });
+    });
+
+    // Remove bullets
+    bulletsToRemove.forEach(bulletId => {
+      this.state.bullets.delete(bulletId);
     });
   }
 }
