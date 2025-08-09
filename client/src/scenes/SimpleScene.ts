@@ -10,17 +10,28 @@ interface SimplePlayer {
   movingRight: boolean;
   color: string;
   facingDirection: string;
+  hasGun: boolean;
+}
+
+interface SimpleGun {
+  id: string;
+  x: number;
+  y: number;
+  isPickedUp: boolean;
 }
 
 export class SimpleScene extends Phaser.Scene {
   private client!: Colyseus.Client;
   private room!: Colyseus.Room;
   private players: Map<string, SimplePlayerConfig> = new Map();
+  private guns: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+  private gunLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private wasdKeys!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
   private currentMap: MapName = 'simple'; // Default map
   private mapInitialized = false;
   private mapNameText?: Phaser.GameObjects.Text;
   private playerCountText?: Phaser.GameObjects.Text;
+  private gunStatusText?: Phaser.GameObjects.Text;
   private platformVisuals: Phaser.GameObjects.Rectangle[] = [];
 
   constructor() {
@@ -92,6 +103,14 @@ export class SimpleScene extends Phaser.Scene {
       padding: { x: 8, y: 4 }
     }).setScrollFactor(0).setDepth(1000);
 
+    // Gun status indicator
+    this.gunStatusText = this.add.text(16, 48, 'Gun: Available', {
+      fontSize: '14px',
+      color: '#00FF00',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    }).setScrollFactor(0).setDepth(1000);
+
     // Add quit button
     this.add.text(400, 580, 'Press M for Menu', {
       fontSize: '16px',
@@ -158,7 +177,7 @@ export class SimpleScene extends Phaser.Scene {
 
         // Listen for changes to this specific player
         (player as any).onChange(() => {
-          console.log(`Player ${sessionId} update: x=${player.x}, y=${player.y}, left=${player.movingLeft}, right=${player.movingRight}, facing=${player.facingDirection}`);
+          console.log(`Player ${sessionId} update: x=${player.x}, y=${player.y}, left=${player.movingLeft}, right=${player.movingRight}, facing=${player.facingDirection}, hasGun=${player.hasGun}`);
           
           // Get SimplePlayerConfig instance
           const simplePlayer = this.players.get(sessionId);
@@ -168,6 +187,15 @@ export class SimpleScene extends Phaser.Scene {
           simplePlayer.updatePosition(player.x, player.y);
           simplePlayer.updateMovement(player.movingLeft, player.movingRight);
           simplePlayer.updateFacingDirection(player.facingDirection);
+          
+          // Update name text to show gun status
+          const baseName = isMyPlayer ? `You (P${playerIndex})` : `Player ${playerIndex}`;
+          const gunStatus = player.hasGun ? ' [GUN]' : '';
+          simplePlayer.nameText.setText(baseName + gunStatus);
+          simplePlayer.nameText.setColor(player.hasGun ? '#00FF00' : '#FFFFFF'); // Green if has gun
+          
+          // Update global gun status display
+          this.updateGunStatusDisplay();
         });
       });
 
@@ -181,6 +209,57 @@ export class SimpleScene extends Phaser.Scene {
           this.players.delete(sessionId);
         }
         this.updatePlayerCount();
+        this.updateGunStatusDisplay();
+      });
+
+      // When a gun is added
+      this.room.state.guns.onAdd((gun: SimpleGun, gunId: string) => {
+        console.log('Gun added:', gunId, 'at', gun.x, gun.y);
+        
+        // Create visual gun (brown/gray rectangle with white outline)
+        const gunRect = this.add.rectangle(gun.x, gun.y, 20, 10, 0x8B4513);
+        gunRect.setStrokeStyle(2, 0xFFFFFF);
+        gunRect.setOrigin(0.5, 0.5);
+        this.guns.set(gunId, gunRect);
+
+        // Create gun label above the gun
+        const gunLabel = this.add.text(gun.x, gun.y - 20, 'GUN', {
+          fontSize: '12px',
+          color: '#FFFF00',
+          backgroundColor: '#000000',
+          padding: { x: 4, y: 2 }
+        });
+        gunLabel.setOrigin(0.5, 0.5);
+        this.gunLabels.set(gunId, gunLabel);
+
+        // Listen for gun changes (pickup)
+        (gun as any).onChange(() => {
+          const gunRect = this.guns.get(gunId);
+          const gunLabel = this.gunLabels.get(gunId);
+          if (gunRect && gunLabel && gun.isPickedUp) {
+            // Hide gun and label when picked up
+            gunRect.setVisible(false);
+            gunLabel.setVisible(false);
+          }
+          // Update gun status display when gun changes
+          this.updateGunStatusDisplay();
+        });
+      });
+
+      // When a gun is removed
+      this.room.state.guns.onRemove((_gun: SimpleGun, gunId: string) => {
+        console.log('Gun removed:', gunId);
+        
+        const gunRect = this.guns.get(gunId);
+        const gunLabel = this.gunLabels.get(gunId);
+        if (gunRect) {
+          gunRect.destroy();
+          this.guns.delete(gunId);
+        }
+        if (gunLabel) {
+          gunLabel.destroy();
+          this.gunLabels.delete(gunId);
+        }
       });
 
       // Handle connection errors
@@ -226,6 +305,12 @@ export class SimpleScene extends Phaser.Scene {
     this.mapInitialized = false;
     this.platformVisuals.forEach(visual => visual.destroy());
     this.platformVisuals = [];
+    
+    // Clean up guns and labels
+    this.guns.forEach(gun => gun.destroy());
+    this.guns.clear();
+    this.gunLabels.forEach(label => label.destroy());
+    this.gunLabels.clear();
   }
 
   private createMapFromServerInfo(mapConfig: any) {
@@ -305,6 +390,41 @@ export class SimpleScene extends Phaser.Scene {
     if (this.playerCountText && this.room) {
       const playerCount = Object.keys(this.room.state.players).length;
       this.playerCountText.setText(`Players: ${playerCount}`);
+    }
+  }
+
+  private updateGunStatusDisplay() {
+    if (!this.gunStatusText || !this.room || !this.room.state) return;
+
+    // Check if any player has the gun
+    let gunHolder: string | null = null;
+    this.room.state.players.forEach((player: SimplePlayer, sessionId: string) => {
+      if (player.hasGun) {
+        // Find the player index for display
+        const playerIndex = Array.from(this.room.state.players.keys()).indexOf(sessionId) + 1;
+        const isMyPlayer = sessionId === this.room.sessionId;
+        gunHolder = isMyPlayer ? 'You' : `P${playerIndex}`;
+      }
+    });
+
+    // Check if gun is available on the ground
+    let gunOnGround = false;
+    this.room.state.guns.forEach((gun: SimpleGun) => {
+      if (!gun.isPickedUp) {
+        gunOnGround = true;
+      }
+    });
+
+    // Update display text and color
+    if (gunHolder) {
+      this.gunStatusText.setText(`Gun: ${gunHolder} has it`);
+      this.gunStatusText.setColor('#FF6B6B'); // Red when someone has it
+    } else if (gunOnGround) {
+      this.gunStatusText.setText('Gun: Available');
+      this.gunStatusText.setColor('#00FF00'); // Green when available
+    } else {
+      this.gunStatusText.setText('Gun: None');
+      this.gunStatusText.setColor('#FFFF00'); // Yellow when none
     }
   }
 }

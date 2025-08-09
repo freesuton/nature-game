@@ -1,6 +1,7 @@
 import { Room, Client } from '@colyseus/core';
 import { SimpleGameState } from './schema/SimpleGameState';
 import { SimplePlayerState } from './schema/SimplePlayerState';
+import { GunState } from './schema/GunState';
 import { ArcadePhysics } from 'arcade-physics';
 import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName } from '../../../MapConfig';
 
@@ -58,6 +59,8 @@ export class SimpleRoom extends Room<SimpleGameState> {
       );
     });
     
+    // Spawn gun in center of ground
+    this.spawnCenterGun();
 
     // Server physics update at 60 FPS
     this.setSimulationInterval(() => this.updatePhysics(), 1000/60);
@@ -136,6 +139,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
     player.movingRight = false;
     player.color = assignedColor;
     player.facingDirection = "right"; // Default facing direction
+    player.hasGun = false; // No gun initially
     
     this.state.players.set(client.sessionId, player);
     console.log(`Player spawned at x=${player.x}, y=${player.y} with unique color=${player.color}`);
@@ -191,6 +195,9 @@ export class SimpleRoom extends Room<SimpleGameState> {
         playerBody.x = 800;
       }
     });
+
+    // Check gun pickups
+    this.checkGunPickups();
   }
 
   private getUniquePlayerColor(): string {
@@ -220,5 +227,49 @@ export class SimpleRoom extends Room<SimpleGameState> {
     console.log(`Assigning player color: ${assignedColor} (unique: ${!usedColors.has(assignedColor)})`);
     
     return assignedColor;
+  }
+
+  private spawnCenterGun() {
+    // Find the ground platform for the current map
+    const mapConfig = getMapConfig(this.currentMap);
+    const groundPlatform = mapConfig.platforms.find(platform => platform.type === 'ground');
+    
+    if (!groundPlatform) {
+      console.error('No ground platform found in map config!');
+      return;
+    }
+
+    // Spawn a gun in the center of the ground
+    const gun = new GunState();
+    gun.id = "center_gun";
+    gun.x = mapConfig.width / 2; // Center of map width
+    gun.y = groundPlatform.y - 10; // Just above the ground platform
+    gun.isPickedUp = false;
+
+    this.state.guns.set("center_gun", gun);
+    console.log(`Gun spawned in center at x=${gun.x}, y=${gun.y} on ${mapConfig.name} (ground at y=${groundPlatform.y})`);
+  }
+
+  private checkGunPickups() {
+    this.state.guns.forEach((gun, gunId) => {
+      if (gun.isPickedUp) return; // Skip already picked up guns
+
+      this.state.players.forEach((player, playerId) => {
+        if (player.hasGun) return; // Skip players who already have a gun
+
+        // Check collision between player and gun (simple distance check)
+        const distance = Math.sqrt(
+          Math.pow(player.x - gun.x, 2) + Math.pow(player.y - gun.y, 2)
+        );
+
+        if (distance < 40) { // Close enough to pick up
+          // Player picks up the gun
+          gun.isPickedUp = true;
+          player.hasGun = true;
+
+          console.log(`Player ${playerId} picked up gun ${gunId}`);
+        }
+      });
+    });
   }
 }
