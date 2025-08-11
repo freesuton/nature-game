@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd server && npm run build:all",
+    "build": "cd server && npm install && npm run build:all",
     "start": "cd server && npm start",
     "dev": "cd server && npm run dev:fullstack",
     "dev:server-only": "cd server && npm run dev"

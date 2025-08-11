@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node lib/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "npm install && tsc",
     "build:client": "cd ../client && npm install && npm run build",
     "build:all": "npm run build:client && npm run build",
     "dev:fullstack": "npm run build:client && npm run dev"
