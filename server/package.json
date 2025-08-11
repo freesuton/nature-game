@@ -18,7 +18,7 @@
     "@colyseus/ws-transport": "^0.15.0",
     "arcade-physics": "^0.1.0",
     "express": "^4.18.3",
-    "shared": "*"
+    "@nature-game/shared": "file:../shared"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

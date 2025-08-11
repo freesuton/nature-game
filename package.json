@@ -2,11 +2,18 @@
   "name": "nature-game",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "shared",
+    "client", 
+    "server"
+  ],
   "scripts": {
-    "build": "cd server && npm install && npm run build:all",
+    "build": "npm run build:shared && cd server && npm install && npm run build:all",
+    "build:shared": "cd shared && npm run build",
     "start": "cd server && npm start",
-    "dev": "cd server && npm run dev:fullstack",
-    "dev:server-only": "cd server && npm run dev"
+    "dev": "npm run build:shared && cd server && npm run dev:fullstack",
+    "dev:server-only": "cd server && npm run dev",
+    "dev:shared": "cd shared && npm run dev"
   },
   "engines": {
     "node": ">=16.0.0"

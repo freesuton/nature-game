@@ -1,6 +1,6 @@
 import * as Phaser from 'phaser';
 import * as Colyseus from 'colyseus.js';
-import { SimpleMapConfig, Platform, MapName, getRandomMapName } from '../../../MapConfig';
+import { SimpleMapConfig, Platform, MapName, getRandomMapName } from '@nature-game/shared';
 import { SimplePlayerConfig } from '../sprites/SimplePlayerConfig';
 
 interface SimplePlayer {

@@ -4,7 +4,7 @@ import { SimplePlayerState } from './schema/SimplePlayerState';
 import { GunState } from './schema/GunState';
 import { BulletState } from './schema/BulletState';
 import { ArcadePhysics } from 'arcade-physics';
-import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName } from '../MapConfig';
+import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName } from '@nature-game/shared';
 
 export class SimpleRoom extends Room<SimpleGameState> {
   maxClients = 4;

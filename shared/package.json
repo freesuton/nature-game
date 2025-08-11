@@ -1,0 +1,25 @@
+{
+  "name": "@nature-game/shared",
+  "version": "1.0.0",
+  "description": "Shared configurations and types for nature-game",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/index.js",
+      "require": "./lib/index.cjs",
+      "types": "./lib/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "npm run build:esm && npm run build:cjs && npm run copy:cjs",
+    "build:esm": "tsc",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "copy:cjs": "cp lib-cjs/index.js lib/index.cjs && cp lib-cjs/MapConfig.js lib/MapConfig.cjs",
+    "dev": "tsc --watch"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
