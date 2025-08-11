@@ -159,7 +159,13 @@ export class SimpleScene extends Phaser.Scene {
 
   private async connectToServer() {
     try {
-      this.client = new Colyseus.Client('ws://localhost:2567');
+      // Dynamic server URL - works for both local development and deployment
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host || 'localhost:2567';
+      const serverUrl = `${protocol}//${host}`;
+      
+      console.log(`Connecting to server: ${serverUrl}`);
+      this.client = new Colyseus.Client(serverUrl);
       
       // Join an existing room if possible, otherwise create a new one
       this.room = await this.client.joinOrCreate('simple', {

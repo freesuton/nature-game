@@ -2,11 +2,14 @@
   "name": "server",
   "version": "0.0.1",
   "private": true,
-  "main": "lib/index.js",
+  "main": "lib/server/src/index.js",
   "scripts": {
-    "start": "node lib/index.js",
+    "start": "node lib/server/src/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "build:client": "cd ../client && npm install && npm run build",
+    "build:all": "npm run build:client && npm run build",
+    "dev:fullstack": "npm run build:client && npm run dev"
   },
   "dependencies": {
     "@colyseus/core": "^0.15.0",

@@ -1,21 +1,14 @@
 {
   "name": "nature-game",
+  "version": "1.0.0",
   "private": true,
-  "version": "0.0.1",
-  "workspaces": [
-    "client",
-    "server",
-    "shared"
-  ],
   "scripts": {
-    "dev:client": "npm run dev -w client",
-    "dev:server": "npm run dev -w server",
-    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
-    "build": "npm run build -w client && npm run build -w server",
-    "start": "npm run start -w server"
+    "build": "cd server && npm run build:all",
+    "start": "cd server && npm start",
+    "dev": "cd server && npm run dev:fullstack",
+    "dev:server-only": "cd server && npm run dev"
   },
-  "devDependencies": {
-    "concurrently": "^8.2.2",
-    "typescript": "^5.4.2"
+  "engines": {
+    "node": ">=16.0.0"
   }
 }

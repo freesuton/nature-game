@@ -23,7 +23,7 @@ export class GameScene extends Scene {
 
   update() {
     GameLogic.handleMovement(this.gameState);
-    GameLogic.handleShooting(this.gameState, this, (x, y, direction) => {
+    GameLogic.handleShooting(this.gameState, this, (_x, _y, direction) => {
       console.log('Bullet fired!', direction > 0 ? 'right' : 'left');
     });
   }

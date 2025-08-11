@@ -8,7 +8,7 @@ export class MultiplayerGameScene extends Scene {
   private localPlayer?: Player;
   private otherPlayers: Map<string, Player> = new Map();
   private playerTargets: Map<string, { x: number, y: number }> = new Map();
-  private platforms?: Phaser.Physics.Arcade.StaticGroup;
+  // private platforms?: Phaser.Physics.Arcade.StaticGroup; // Unused for now
   private cursors?: Phaser.Types.Input.Keyboard.CursorKeys;
   private wasd?: any;
   private bullets: Map<string, Bullet> = new Map();
@@ -33,8 +33,8 @@ export class MultiplayerGameScene extends Scene {
   }
 
   async create() {
-    // Create platforms
-    this.platforms = this.physics.add.staticGroup();
+    // Create platforms (commented out for now)
+    // this.platforms = this.physics.add.staticGroup();
     // center, height, 0,0,width,0, color
     // Ground
     this.add.line(400, 400, 0, 0, 800, 0, 0x0000ff);
@@ -65,7 +65,11 @@ export class MultiplayerGameScene extends Scene {
 
     // Connect to Colyseus server
     try {
-      const client = new Client('ws://localhost:2567');
+      // Dynamic server URL - works for both local development and deployment
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const host = window.location.host || 'localhost:2567';
+const serverUrl = `${protocol}//${host}`;
+const client = new Client(serverUrl);
       this.room = await client.joinOrCreate('game');
       console.log("Connected to room:", this.room.sessionId);
       this.setupRoomHandlers();
@@ -196,7 +200,11 @@ export class MultiplayerGameScene extends Scene {
 
     // Rejoin the game
     try {
-      const client = new Client('ws://localhost:2567');
+      // Dynamic server URL - works for both local development and deployment
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const host = window.location.host || 'localhost:2567';
+const serverUrl = `${protocol}//${host}`;
+const client = new Client(serverUrl);
       this.room = await client.joinOrCreate('game');
       console.log("Rejoined room:", this.room.sessionId);
       this.setupRoomHandlers();
@@ -292,7 +300,7 @@ export class MultiplayerGameScene extends Scene {
     });
 
     // Handle player removal
-    this.room.state.players.onRemove((player: any, sessionId: string) => {
+    this.room.state.players.onRemove((_player: any, sessionId: string) => {
       console.log(`Player ${sessionId} removed from game state`);
       
       // Check if it's the local player
