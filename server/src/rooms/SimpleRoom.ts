@@ -134,6 +134,12 @@ export class SimpleRoom extends Room<SimpleGameState> {
       this.state.bullets.set(bulletId, bullet);
       console.log(`Player ${client.sessionId} shot bullet with gun`);
     });
+
+    // Handle ping requests for latency measurement
+    this.onMessage("ping", (client, data) => {
+      // Simply respond with pong - the client will calculate the round-trip time
+      client.send("pong", data);
+    });
   }
 
   onJoin(client: Client) {

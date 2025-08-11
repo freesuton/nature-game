@@ -45,7 +45,13 @@ export class SimpleScene extends Phaser.Scene {
   private mapNameText?: Phaser.GameObjects.Text;
   private playerCountText?: Phaser.GameObjects.Text;
   private gunStatusText?: Phaser.GameObjects.Text;
+  private lagText?: Phaser.GameObjects.Text;
   private platformVisuals: Phaser.GameObjects.Rectangle[] = [];
+  
+  // Ping/Lag tracking
+  private lastPingTime: number = 0;
+  private pingHistory: number[] = [];
+  private pingInterval?: number;
 
   constructor() {
     super({ 
@@ -139,6 +145,14 @@ export class SimpleScene extends Phaser.Scene {
       backgroundColor: '#000000',
       padding: { x: 8, y: 4 }
     }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(1000);
+
+    // Lag/Ping indicator in top-right corner
+    this.lagText = this.add.text(784, 16, 'Ping: --ms', {
+      fontSize: '14px',
+      color: '#FFFFFF',
+      backgroundColor: '#000000',
+      padding: { x: 8, y: 4 }
+    }).setOrigin(1, 0).setScrollFactor(0).setDepth(1000);
     
 
     // Setup WASD input
@@ -173,6 +187,9 @@ export class SimpleScene extends Phaser.Scene {
       });
 
       console.log('Connected to SimpleRoom:', this.room.id);
+
+      // Start ping monitoring
+      this.startPingMonitoring();
 
       // Handle map info from server (this is the authoritative map)
       this.room.onMessage('mapInfo', (data) => {
@@ -347,6 +364,13 @@ export class SimpleScene extends Phaser.Scene {
         console.log('Left room with code:', code);
       });
 
+      // Handle ping response from server
+      this.room.onMessage('pong', () => {
+        const currentTime = Date.now();
+        const pingTime = currentTime - this.lastPingTime;
+        this.updatePing(pingTime);
+      });
+
     } catch (error) {
       console.error('Failed to connect to server:', error);
     }
@@ -382,6 +406,13 @@ export class SimpleScene extends Phaser.Scene {
 
   shutdown() {
     this.leaveRoom();
+    
+    // Stop ping monitoring
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = undefined;
+    }
+    
     // Reset map initialization flag and clear visuals so platforms will be rebuilt when rejoining
     this.mapInitialized = false;
     this.platformVisuals.forEach(visual => visual.destroy());
@@ -509,5 +540,54 @@ export class SimpleScene extends Phaser.Scene {
       this.gunStatusText.setText('Gun: None');
       this.gunStatusText.setColor('#FFFF00'); // Yellow when none
     }
+  }
+
+  private startPingMonitoring() {
+    // Send initial ping
+    this.sendPing();
+    
+    // Set up regular ping interval (every 2 seconds)
+    this.pingInterval = setInterval(() => {
+      this.sendPing();
+    }, 2000);
+  }
+
+  private sendPing() {
+    if (!this.room) return;
+    
+    this.lastPingTime = Date.now();
+    this.room.send('ping', { timestamp: this.lastPingTime });
+  }
+
+  private updatePing(pingTime: number) {
+    // Keep a rolling average of the last 5 pings
+    this.pingHistory.push(pingTime);
+    if (this.pingHistory.length > 5) {
+      this.pingHistory.shift();
+    }
+    
+    // Calculate average ping
+    const avgPing = Math.round(this.pingHistory.reduce((a, b) => a + b, 0) / this.pingHistory.length);
+    
+    // Update display
+    this.updateLagDisplay(avgPing);
+  }
+
+  private updateLagDisplay(ping: number) {
+    if (!this.lagText) return;
+
+    // Color code based on ping quality
+    let color = '#00FF00'; // Green for good ping
+    
+    if (ping > 200) {
+      color = '#FF0000'; // Red for bad ping
+    } else if (ping > 100) {
+      color = '#FFA500'; // Orange for moderate ping
+    } else if (ping > 50) {
+      color = '#FFFF00'; // Yellow for okay ping
+    }
+
+    this.lagText.setText(`${ping}ms`);
+    this.lagText.setColor(color);
   }
 }
