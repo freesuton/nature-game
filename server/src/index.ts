@@ -3,6 +3,7 @@ import { WebSocketTransport } from '@colyseus/ws-transport';
 import { createServer } from 'http';
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { monitor } from '@colyseus/monitor';
 import { GameRoom } from './rooms/GameRoom';
 import { SimpleRoom } from './rooms/SimpleRoom';
@@ -52,7 +53,6 @@ app.get('*', (req, res) => {
   
   // Check if index.html exists, if not show development info
   const indexPath = path.join(clientDistPath, 'index.html');
-  const fs = require('fs');
   
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
