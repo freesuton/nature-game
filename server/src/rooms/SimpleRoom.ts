@@ -4,7 +4,7 @@ import { SimplePlayerState } from './schema/SimplePlayerState';
 import { GunState } from './schema/GunState';
 import { BulletState } from './schema/BulletState';
 import { ArcadePhysics } from 'arcade-physics';
-import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName } from '@nature-game/shared';
+import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName, GunSpawn } from '@nature-game/shared';
 
 export class SimpleRoom extends Room<SimpleGameState> {
   maxClients = 4;
@@ -63,8 +63,8 @@ export class SimpleRoom extends Room<SimpleGameState> {
       );
     });
     
-    // Spawn gun in center of ground
-    this.spawnCenterGun();
+    // Spawn guns based on map configuration
+    this.spawnGuns();
 
     // Server physics update at 60 FPS
     this.setSimulationInterval(() => this.updatePhysics(), 1000/60);
@@ -269,25 +269,22 @@ export class SimpleRoom extends Room<SimpleGameState> {
     return assignedColor;
   }
 
-  private spawnCenterGun() {
-    // Find the ground platform for the current map
+  private spawnGuns() {
     const mapConfig = getMapConfig(this.currentMap);
-    const groundPlatform = mapConfig.platforms.find(platform => platform.type === 'ground');
     
-    if (!groundPlatform) {
-      console.error('No ground platform found in map config!');
-      return;
-    }
+    // Spawn guns based on map configuration
+    mapConfig.gunSpawns.forEach((gunSpawn: GunSpawn) => {
+      const gun = new GunState();
+      gun.id = gunSpawn.id;
+      gun.x = gunSpawn.x;
+      gun.y = gunSpawn.y;
+      gun.isPickedUp = false;
 
-    // Spawn a gun in the center of the ground
-    const gun = new GunState();
-    gun.id = "center_gun";
-    gun.x = mapConfig.width / 2; // Center of map width
-    gun.y = groundPlatform.y - 10; // Just above the ground platform
-    gun.isPickedUp = false;
-
-    this.state.guns.set("center_gun", gun);
-    console.log(`Gun spawned in center at x=${gun.x}, y=${gun.y} on ${mapConfig.name} (ground at y=${groundPlatform.y})`);
+      this.state.guns.set(gunSpawn.id, gun);
+      console.log(`Gun '${gunSpawn.id}' spawned at x=${gun.x}, y=${gun.y} on ${mapConfig.name}`);
+    });
+    
+    console.log(`Total ${mapConfig.gunSpawns.length} guns spawned on ${mapConfig.name}`);
   }
 
   private checkGunPickups() {

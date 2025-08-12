@@ -11,7 +11,7 @@
     "build": "npm run build:shared && cd server && npm install && npm run build:all",
     "build:shared": "cd shared && npm run build",
     "start": "cd server && npm start",
-    "dev": "npm run build:shared && cd server && npm run dev:fullstack",
+    "dev": "npm run build:shared && npm run dev:shared & cd server && npm run dev:fullstack",
     "dev:server-only": "cd server && npm run dev",
     "dev:shared": "cd shared && npm run dev"
   },

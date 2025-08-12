@@ -1,7 +1,6 @@
 import { Types } from 'phaser';
 import { MenuScene } from '../scenes/MenuScene';
 import { GameScene } from '../scenes/GameScene';
-import { MultiplayerGameScene } from '../scenes/MultiplayerGameScene';
 import { SimpleScene } from '../scenes/SimpleScene';
 
 export const GameConfig: Types.Core.GameConfig = {
@@ -21,5 +20,5 @@ export const GameConfig: Types.Core.GameConfig = {
       debug: true // Set to false in production
     }
   },
-  scene: [MenuScene, GameScene, MultiplayerGameScene, SimpleScene]
+  scene: [MenuScene, GameScene, SimpleScene]
 };

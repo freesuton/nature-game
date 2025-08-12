@@ -25,21 +25,8 @@ export class MenuScene extends Scene {
     .on('pointerout', () => singlePlayerBtn.setAlpha(1))
     .on('pointerdown', () => this.startSinglePlayer());
 
-    // Add multiplayer button
-    const multiplayerBtn = this.add.text(400, 360, 'Join Multiplayer', {
-      fontSize: '24px',
-      color: '#ffffff',
-      backgroundColor: '#1976D2',
-      padding: { x: 20, y: 10 }
-    })
-    .setOrigin(0.5)
-    .setInteractive({ useHandCursor: true })
-    .on('pointerover', () => multiplayerBtn.setAlpha(0.8))
-    .on('pointerout', () => multiplayerBtn.setAlpha(1))
-    .on('pointerdown', () => this.startMultiplayer());
-
     // Add simple game button
-    const simpleBtn = this.add.text(400, 420, 'Simple Game', {
+    const simpleBtn = this.add.text(400, 360, 'Simple Game', {
       fontSize: '24px',
       color: '#ffffff',
       backgroundColor: '#FF9800',
@@ -52,7 +39,7 @@ export class MenuScene extends Scene {
     .on('pointerdown', () => this.startSimple());
 
     // Add instructions
-    this.add.text(400, 520, 'Controls:\nArrow Keys/WASD - Move\nUp/W - Jump\nJ - Shoot\nSimple: Server physics only', {
+    this.add.text(400, 460, 'Controls:\nArrow Keys/WASD - Move\nUp/W - Jump\nJ - Shoot\nSimple: Server physics only', {
       fontSize: '16px',
       color: '#ffffff',
       align: 'center'
@@ -61,10 +48,6 @@ export class MenuScene extends Scene {
 
   private startSinglePlayer() {
     this.scene.start('GameScene');
-  }
-
-  private startMultiplayer() {
-    this.scene.start('MultiplayerGameScene');
   }
 
   private startSimple() {

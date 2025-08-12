@@ -5,7 +5,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { monitor } from '@colyseus/monitor';
-import { GameRoom } from './rooms/GameRoom';
+
 import { SimpleRoom } from './rooms/SimpleRoom';
 
 const port = Number(process.env.PORT || 2567);
@@ -27,9 +27,6 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
   next();
 });
-
-// Register GameRoom as "game"
-gameServer.define("game", GameRoom);
 
 // Register SimpleRoom as "simple"
 gameServer.define("simple", SimpleRoom);

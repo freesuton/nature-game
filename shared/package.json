@@ -17,7 +17,8 @@
     "build:esm": "tsc",
     "build:cjs": "tsc -p tsconfig.cjs.json",
     "copy:cjs": "cp lib-cjs/index.js lib/index.cjs && cp lib-cjs/MapConfig.js lib/MapConfig.cjs",
-    "dev": "tsc --watch"
+    "dev": "npm run build && npm run dev:watch",
+    "dev:watch": "tsc --watch"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
