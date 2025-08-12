@@ -17,7 +17,8 @@ exports.SimpleMapConfig = {
     ],
     gunSpawns: [
         { id: 'center_gun', x: 400, y: 490 }, // Center of ground platform
-        { id: 'platform_gun', x: 150, y: 240 } // On left platform
+        { id: 'platform_gun', x: 150, y: 240 }, // On left platform
+        { id: 'platform_gun_right', x: 800, y: 480 } // On right platform
     ]
 };
 exports.ForestMapConfig = {
@@ -35,7 +36,8 @@ exports.ForestMapConfig = {
     gunSpawns: [
         { id: 'forest_center', x: 275, y: 440 }, // On first platform
         { id: 'forest_high', x: 675, y: 140 }, // On highest platform
-        { id: 'forest_ground', x: 100, y: 540 } // On ground left side
+        { id: 'forest_ground', x: 100, y: 540 }, // On ground left side
+        { id: 'forest_ground_right', x: 800, y: 480 } // On ground right side
     ]
 };
 exports.CaveMapConfig = {
@@ -53,7 +55,8 @@ exports.CaveMapConfig = {
     gunSpawns: [
         { id: 'cave_left', x: 200, y: 390 }, // On left platform
         { id: 'cave_right', x: 610, y: 290 }, // On right platform  
-        { id: 'cave_center', x: 400, y: 190 } // On center platform
+        { id: 'cave_center', x: 400, y: 190 }, // On center platform
+        { id: 'cave_border', x: 800, y: 480 } // On ground left side
     ]
 };
 // Map registry for easy access

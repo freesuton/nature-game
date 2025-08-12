@@ -9,7 +9,7 @@ import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapNam
 export class SimpleRoom extends Room<SimpleGameState> {
   maxClients = 4;
 
-  private readonly MOVE_SPEED = 200; // pixels per second
+  private readonly MOVE_SPEED = 100; // pixels per second
   private readonly JUMP_SPEED = 400; // pixels per second
   private readonly PLAYER_WIDTH = 32;
   private readonly PLAYER_HEIGHT = 48;
@@ -112,15 +112,26 @@ export class SimpleRoom extends Room<SimpleGameState> {
       }
     });
 
-    // Handle shooting
+    // Handle J key action (pickup gun or shoot)
     this.onMessage("shoot", (client, data) => {
       const player = this.state.players.get(client.sessionId);
-      if (!player || !player.hasGun || player.isDead) {
-        console.log(`Cannot shoot: player ${client.sessionId} - hasGun: ${player?.hasGun}, isDead: ${player?.isDead}`);
+      if (!player || player.isDead) {
+        console.log(`Cannot perform action: player ${client.sessionId} is dead or doesn't exist`);
         return;
       }
 
-      // Create bullet
+      // If player doesn't have a gun, try to pick one up
+      if (!player.hasGun) {
+        const pickedUp = this.tryPickupGun(client.sessionId);
+        if (pickedUp) {
+          console.log(`Player ${client.sessionId} picked up a gun with J key`);
+        } else {
+          console.log(`Player ${client.sessionId} tried to pick up gun but none in range`);
+        }
+        return;
+      }
+
+      // If player has a gun, shoot
       const bulletId = `bullet_${client.sessionId}_${Date.now()}`;
       const bullet = new BulletState();
       bullet.id = bulletId;
@@ -133,6 +144,29 @@ export class SimpleRoom extends Room<SimpleGameState> {
 
       this.state.bullets.set(bulletId, bullet);
       console.log(`Player ${client.sessionId} shot bullet with gun`);
+    });
+
+    // Handle dropping gun
+    this.onMessage("dropGun", (client, data) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || !player.hasGun || player.isDead) {
+        console.log(`Cannot drop gun: player ${client.sessionId} - hasGun: ${player?.hasGun}, isDead: ${player?.isDead}`);
+        return;
+      }
+
+      // Player drops the gun
+      player.hasGun = false;
+      
+      // Create a new gun entity at player's position
+      const droppedGunId = `dropped_gun_${client.sessionId}_${Date.now()}`;
+      const droppedGun = new GunState();
+      droppedGun.id = droppedGunId;
+      droppedGun.x = player.x + 16; // Center of player
+      droppedGun.y = player.y + 35; // Slightly below player (closer for easier pickup)
+      droppedGun.isPickedUp = false;
+
+      this.state.guns.set(droppedGunId, droppedGun);
+      console.log(`Player ${client.sessionId} dropped gun '${droppedGunId}' at x=${droppedGun.x}, y=${droppedGun.y} (pickupable: ${!droppedGun.isPickedUp})`);
     });
 
     // Handle ping requests for latency measurement
@@ -233,8 +267,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
       }
     });
 
-    // Check gun pickups
-    this.checkGunPickups();
+    // Note: Gun pickups are now manual (J key), not automatic
 
     // Update bullets
     this.updateBullets();
@@ -287,27 +320,44 @@ export class SimpleRoom extends Room<SimpleGameState> {
     console.log(`Total ${mapConfig.gunSpawns.length} guns spawned on ${mapConfig.name}`);
   }
 
-  private checkGunPickups() {
+  private tryPickupGun(playerId: string): boolean {
+    const player = this.state.players.get(playerId);
+    if (!player || player.hasGun || player.isDead) {
+      return false; // Can't pick up if player has gun, is dead, or doesn't exist
+    }
+
+    // Find the closest available gun
+    let closestGun: { gun: any, gunId: string, distance: number } | null = null;
+
     this.state.guns.forEach((gun, gunId) => {
       if (gun.isPickedUp) return; // Skip already picked up guns
 
-      this.state.players.forEach((player, playerId) => {
-        if (player.hasGun || player.isDead) return; // Skip players who already have a gun or are dead
+      // Check distance to this gun
+      // Player position is top-left, so calculate center of player
+      const playerCenterX = player.x + this.PLAYER_WIDTH / 2;  // player.x + 16
+      const playerCenterY = player.y + this.PLAYER_HEIGHT / 2; // player.y + 24
+      
+      // Gun position is already center, so compare center-to-center
+      const distance = Math.sqrt(
+        Math.pow(playerCenterX - gun.x, 2) + Math.pow(playerCenterY - gun.y, 2)
+      );
 
-        // Check collision between player and gun (simple distance check)
-        const distance = Math.sqrt(
-          Math.pow(player.x - gun.x, 2) + Math.pow(player.y - gun.y, 2)
-        );
-
-        if (distance < 40) { // Close enough to pick up
-          // Player picks up the gun
-          gun.isPickedUp = true;
-          player.hasGun = true;
-
-          console.log(`Player ${playerId} picked up gun ${gunId}`);
+      if (distance < 40) { // Within pickup range
+        if (!closestGun || distance < closestGun.distance) {
+          closestGun = { gun, gunId, distance };
         }
-      });
+      }
     });
+
+    // Pick up the closest gun if found
+    if (closestGun) {
+      closestGun.gun.isPickedUp = true;
+      player.hasGun = true;
+      console.log(`Player ${playerId} picked up gun '${closestGun.gunId}' (distance: ${Math.round(closestGun.distance)})`);
+      return true;
+    }
+
+    return false; // No gun found in range
   }
 
   private updateBullets() {
@@ -338,7 +388,19 @@ export class SimpleRoom extends Room<SimpleGameState> {
           // Player is hit - they die
           player.isDead = true;
           if (player.hasGun) {
-            player.hasGun = false; // Drop gun when dead
+            // Drop gun when dead
+            player.hasGun = false;
+            
+            // Create dropped gun at player's position
+            const deathDropGunId = `death_drop_${playerId}_${Date.now()}`;
+            const deathDropGun = new GunState();
+            deathDropGun.id = deathDropGunId;
+            deathDropGun.x = player.x + 16;
+            deathDropGun.y = player.y + 35;
+            deathDropGun.isPickedUp = false;
+            
+            this.state.guns.set(deathDropGunId, deathDropGun);
+            console.log(`Player ${playerId} died and dropped gun '${deathDropGunId}' at x=${deathDropGun.x}, y=${deathDropGun.y}`);
           }
           console.log(`Player ${playerId} was killed by ${bullet.ownerId}'s bullet!`);
           bulletsToRemove.push(bulletId);

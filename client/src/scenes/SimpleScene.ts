@@ -35,17 +35,20 @@ export class SimpleScene extends Phaser.Scene {
   private client!: Colyseus.Client;
   private room!: Colyseus.Room;
   private players: Map<string, SimplePlayerConfig> = new Map();
+  private playerCoordTexts: Map<string, Phaser.GameObjects.Text> = new Map();
   private guns: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private gunLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private bullets: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private wasdKeys!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
   private jKey!: Phaser.Input.Keyboard.Key;
+  private kKey!: Phaser.Input.Keyboard.Key;
   private currentMap: MapName = 'simple'; // Default map
   private mapInitialized = false;
   private mapNameText?: Phaser.GameObjects.Text;
   private playerCountText?: Phaser.GameObjects.Text;
   private gunStatusText?: Phaser.GameObjects.Text;
   private lagText?: Phaser.GameObjects.Text;
+  private centerCoordsText?: Phaser.GameObjects.Text;
   private platformVisuals: Phaser.GameObjects.Rectangle[] = [];
   
   // Ping/Lag tracking
@@ -130,8 +133,8 @@ export class SimpleScene extends Phaser.Scene {
       padding: { x: 8, y: 4 }
     }).setScrollFactor(0).setDepth(1000);
 
-    // Add shooting instruction
-    this.add.text(400, 560, 'Press J to Shoot (with gun)', {
+    // Add interaction instructions
+    this.add.text(400, 540, 'Press J to Pickup Gun / Shoot | K to Drop Gun', {
       fontSize: '16px',
       color: '#FFFF00',
       backgroundColor: '#000000',
@@ -153,6 +156,14 @@ export class SimpleScene extends Phaser.Scene {
       backgroundColor: '#000000',
       padding: { x: 8, y: 4 }
     }).setOrigin(1, 0).setScrollFactor(0).setDepth(1000);
+
+    // Player coordinates display in center
+    this.centerCoordsText = this.add.text(400, 300, 'Player: (---, ---)', {
+      fontSize: '16px',
+      color: '#FFFF00',
+      backgroundColor: '#000000',
+      padding: { x: 12, y: 6 }
+    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(1000);
     
 
     // Setup WASD input
@@ -160,6 +171,9 @@ export class SimpleScene extends Phaser.Scene {
 
     // Setup J key for shooting
     this.jKey = this.input.keyboard!.addKey('J');
+
+    // Setup K key for dropping gun
+    this.kKey = this.input.keyboard!.addKey('K');
 
     // Menu key
     this.input.keyboard!.on('keydown-M', () => {
@@ -219,7 +233,22 @@ export class SimpleScene extends Phaser.Scene {
         // Create SimplePlayerConfig instance with server-provided color and name
         const simplePlayer = new SimplePlayerConfig(this, player.x, player.y, colorHex, playerName);
         
+        // Create coordinate display text above player
+        const coordText = this.add.text(player.x + 16, player.y - 25, `(${Math.round(player.x)}, ${Math.round(player.y)})`, {
+          fontSize: '10px',
+          color: '#FFFF00',
+          stroke: '#000000',
+          strokeThickness: 1
+        }).setOrigin(0.5, 1); // Center horizontally, bottom align
+        
         this.players.set(sessionId, simplePlayer);
+        this.playerCoordTexts.set(sessionId, coordText);
+        
+        // Initialize center coordinates display for current player
+        if (isMyPlayer && this.centerCoordsText) {
+          this.centerCoordsText.setText(`Player: (${Math.round(player.x)}, ${Math.round(player.y)})`);
+        }
+        
         this.updatePlayerCount();
 
         // Listen for changes to this specific player
@@ -228,12 +257,24 @@ export class SimpleScene extends Phaser.Scene {
           
           // Get SimplePlayerConfig instance
           const simplePlayer = this.players.get(sessionId);
+          const coordText = this.playerCoordTexts.get(sessionId);
           if (!simplePlayer) return;
           
           // Update position, movement, and facing direction
           simplePlayer.updatePosition(player.x, player.y);
           simplePlayer.updateMovement(player.movingLeft, player.movingRight);
           simplePlayer.updateFacingDirection(player.facingDirection);
+          
+          // Update coordinate text position and content
+          if (coordText) {
+            coordText.setPosition(player.x + 16, player.y - 25);
+            coordText.setText(`(${Math.round(player.x)}, ${Math.round(player.y)})`);
+          }
+          
+          // Update center coordinates display for current player
+          if (isMyPlayer && this.centerCoordsText) {
+            this.centerCoordsText.setText(`Player: (${Math.round(player.x)}, ${Math.round(player.y)})`);
+          }
           
           // Update death state visual while preserving original color
           if (player.isDead) {
@@ -272,6 +313,14 @@ export class SimpleScene extends Phaser.Scene {
           simplePlayer.destroy();
           this.players.delete(sessionId);
         }
+        
+        // Destroy coordinate text
+        const coordText = this.playerCoordTexts.get(sessionId);
+        if (coordText) {
+          coordText.destroy();
+          this.playerCoordTexts.delete(sessionId);
+        }
+        
         this.updatePlayerCount();
         this.updateGunStatusDisplay();
       });
@@ -281,9 +330,8 @@ export class SimpleScene extends Phaser.Scene {
         console.log('Gun added:', gunId, 'at', gun.x, gun.y);
         
         // Create visual gun (brown/gray rectangle with white outline)
-        const gunRect = this.add.rectangle(gun.x, gun.y, 20, 10, 0x8B4513);
+        const gunRect = this.add.rectangle(gun.x, gun.y, 20, 10, 0x8B4513)
         gunRect.setStrokeStyle(2, 0xFFFFFF);
-        gunRect.setOrigin(0.5, 0.5);
         this.guns.set(gunId, gunRect);
 
         // Create gun label above the gun
@@ -396,6 +444,11 @@ export class SimpleScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.jKey)) {
       this.room.send('shoot', {});
     }
+
+    // Handle drop gun input (K key)
+    if (Phaser.Input.Keyboard.JustDown(this.kKey)) {
+      this.room.send('dropGun', {});
+    }
   }
 
   private leaveRoom() {
@@ -425,6 +478,10 @@ export class SimpleScene extends Phaser.Scene {
     this.gunLabels.clear();
     this.bullets.forEach(bullet => bullet.destroy());
     this.bullets.clear();
+    
+    // Clean up coordinate texts
+    this.playerCoordTexts.forEach(coordText => coordText.destroy());
+    this.playerCoordTexts.clear();
   }
 
   private createMapFromServerInfo(mapConfig: any) {
