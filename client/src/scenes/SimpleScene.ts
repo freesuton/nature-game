@@ -11,6 +11,7 @@ interface SimplePlayer {
   color: string;
   facingDirection: string;
   hasGun: boolean;
+  hasSword: boolean;
   isDead: boolean;
 }
 
@@ -38,6 +39,8 @@ export class SimpleScene extends Phaser.Scene {
   private playerCoordTexts: Map<string, Phaser.GameObjects.Text> = new Map();
   private guns: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private gunLabels: Map<string, Phaser.GameObjects.Text> = new Map();
+  private swords: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+  private swordLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private bullets: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private wasdKeys!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
   private jKey!: Phaser.Input.Keyboard.Key;
@@ -134,12 +137,12 @@ export class SimpleScene extends Phaser.Scene {
     }).setScrollFactor(0).setDepth(1000);
 
     // Add interaction instructions
-    this.add.text(400, 540, 'Press J to Pickup Gun / Shoot | K to Drop Gun', {
-      fontSize: '16px',
-      color: '#FFFF00',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(1000);
+    // this.add.text(400, 540, 'Press J to Pickup/Shoot | K to Drop Weapon (One weapon at a time)', {
+    //   fontSize: '16px',
+    //   color: '#FFFF00',
+    //   backgroundColor: '#000000',
+    //   padding: { x: 8, y: 4 }
+    // }).setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(1000);
 
     // Add quit button
     this.add.text(400, 580, 'Press M for Menu', {
@@ -172,7 +175,7 @@ export class SimpleScene extends Phaser.Scene {
     // Setup J key for shooting
     this.jKey = this.input.keyboard!.addKey('J');
 
-    // Setup K key for dropping gun
+    // Setup K key for dropping weapon
     this.kKey = this.input.keyboard!.addKey('K');
 
     // Menu key
@@ -285,16 +288,19 @@ export class SimpleScene extends Phaser.Scene {
             simplePlayer.sprite.setAlpha(1.0);
           }
           
-          // Update name text to show gun and death status
+          // Update name text to show gun, sword and death status
           const baseName = isMyPlayer ? `You (P${playerIndex})` : `Player ${playerIndex}`;
           const gunStatus = player.hasGun ? ' [GUN]' : '';
+          const swordStatus = player.hasSword ? ' [SWORD]' : '';
           const deathStatus = player.isDead ? ' [DEAD]' : '';
-          simplePlayer.nameText.setText(baseName + gunStatus + deathStatus);
+          simplePlayer.nameText.setText(baseName + gunStatus + swordStatus + deathStatus);
           
           if (player.isDead) {
             simplePlayer.nameText.setColor('#FF0000'); // Red if dead
           } else if (player.hasGun) {
             simplePlayer.nameText.setColor('#00FF00'); // Green if has gun
+          } else if (player.hasSword) {
+            simplePlayer.nameText.setColor('#4169E1'); // Blue if has sword
           } else {
             simplePlayer.nameText.setColor('#FFFFFF'); // White if normal
           }
@@ -374,6 +380,59 @@ export class SimpleScene extends Phaser.Scene {
         }
       });
 
+      // When a sword is added
+      this.room.state.swords.onAdd((sword: any, swordId: string) => {
+        console.log('Sword added:', swordId, 'at', sword.x, sword.y);
+        
+        // Create visual sword (silver/blue rectangle with white outline)
+        const swordRect = this.add.rectangle(sword.x, sword.y, 24, 6, 0xC0C0C0)
+        swordRect.setStrokeStyle(2, 0x4169E1);
+        this.swords.set(swordId, swordRect);
+
+        // Create sword label above the sword
+        const swordLabel = this.add.text(sword.x, sword.y - 20, 'SWORD', {
+          fontSize: '12px',
+          color: '#4169E1',
+          backgroundColor: '#000000',
+          padding: { x: 4, y: 2 }
+        });
+        swordLabel.setOrigin(0.5, 0.5);
+        this.swordLabels.set(swordId, swordLabel);
+
+        // Listen for sword changes (pickup/position)
+        (sword as any).onChange(() => {
+          const swordRect = this.swords.get(swordId);
+          const swordLabel = this.swordLabels.get(swordId);
+          if (swordRect && swordLabel && sword.isPickedUp) {
+            // Hide sword and label when picked up
+            swordRect.setVisible(false);
+            swordLabel.setVisible(false);
+          } else if (swordRect && swordLabel && !sword.isPickedUp) {
+            // Show and update position when available
+            swordRect.setVisible(true);
+            swordLabel.setVisible(true);
+            swordRect.setPosition(sword.x, sword.y);
+            swordLabel.setPosition(sword.x, sword.y - 20);
+          }
+        });
+      });
+
+      // When a sword is removed
+      this.room.state.swords.onRemove((_sword: any, swordId: string) => {
+        console.log('Sword removed:', swordId);
+        
+        const swordRect = this.swords.get(swordId);
+        const swordLabel = this.swordLabels.get(swordId);
+        if (swordRect) {
+          swordRect.destroy();
+          this.swords.delete(swordId);
+        }
+        if (swordLabel) {
+          swordLabel.destroy();
+          this.swordLabels.delete(swordId);
+        }
+      });
+
       // When a bullet is added
       this.room.state.bullets.onAdd((bullet: SimpleBullet, bulletId: string) => {
         console.log('Bullet added:', bulletId, 'at', bullet.x, bullet.y);
@@ -445,7 +504,7 @@ export class SimpleScene extends Phaser.Scene {
       this.room.send('shoot', {});
     }
 
-    // Handle drop gun input (K key)
+    // Handle drop weapon input (K key)
     if (Phaser.Input.Keyboard.JustDown(this.kKey)) {
       this.room.send('dropGun', {});
     }
@@ -471,11 +530,15 @@ export class SimpleScene extends Phaser.Scene {
     this.platformVisuals.forEach(visual => visual.destroy());
     this.platformVisuals = [];
     
-    // Clean up guns, labels, and bullets
+    // Clean up guns, swords, labels, and bullets
     this.guns.forEach(gun => gun.destroy());
     this.guns.clear();
     this.gunLabels.forEach(label => label.destroy());
     this.gunLabels.clear();
+    this.swords.forEach(sword => sword.destroy());
+    this.swords.clear();
+    this.swordLabels.forEach(label => label.destroy());
+    this.swordLabels.clear();
     this.bullets.forEach(bullet => bullet.destroy());
     this.bullets.clear();
     

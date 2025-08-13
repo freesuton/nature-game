@@ -12,6 +12,12 @@ export interface GunSpawn {
   y: number;
 }
 
+export interface SwordSpawn {
+  id: string;
+  x: number;
+  y: number;
+}
+
 export interface MapConfig {
   name: string;
   width: number;
@@ -19,6 +25,7 @@ export interface MapConfig {
   gravity: { x: number; y: number };
   platforms: Platform[];
   gunSpawns: GunSpawn[];
+  swordSpawns: SwordSpawn[];
 }
 
 export const SimpleMapConfig: MapConfig = {
@@ -36,6 +43,9 @@ export const SimpleMapConfig: MapConfig = {
     { id: 'center_gun', x: 400, y: 490 }, // Center of ground platform
     { id: 'platform_gun', x: 150, y: 240 }, // On left platform
     { id: 'platform_gun_right', x: 800, y: 480 } // On right platform
+  ],
+  swordSpawns: [
+    { id: 'center_sword', x: 400, y: 490 } // Center of ground
   ]
 };
 
@@ -56,6 +66,9 @@ export const ForestMapConfig: MapConfig = {
     { id: 'forest_high', x: 675, y: 140 }, // On highest platform
     { id: 'forest_ground', x: 100, y: 540 }, // On ground left side
     { id: 'forest_ground_right', x: 800, y: 480 } // On ground right side
+  ],
+  swordSpawns: [
+    { id: 'forest_sword', x: 400, y: 450 } // Center of ground
   ]
 };
 
@@ -76,6 +89,9 @@ export const CaveMapConfig: MapConfig = {
     { id: 'cave_right', x: 610, y: 290 }, // On right platform  
     { id: 'cave_center', x: 400, y: 190 }, // On center platform
     { id: 'cave_border', x: 800, y: 480 } // On ground left side
+  ],
+  swordSpawns: [
+    { id: 'cave_sword', x: 400, y: 540 } // Center of ground
   ]
 };
 
