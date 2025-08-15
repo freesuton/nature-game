@@ -1,8 +1,9 @@
-import { Schema, type } from '@colyseus/schema';
+import { type } from '@colyseus/schema';
+import { WeaponState } from './WeaponState';
 
-export class GunState extends Schema {
-  @type("string") id: string = "";
-  @type("number") x: number = 0;
-  @type("number") y: number = 0;
-  @type("boolean") isPickedUp: boolean = false;
+export class GunState extends WeaponState {
+  constructor() {
+    super();
+    this.weaponType = "gun";
+  }
 }
