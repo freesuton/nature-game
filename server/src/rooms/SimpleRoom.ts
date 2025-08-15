@@ -1,11 +1,10 @@
 import { Room, Client } from '@colyseus/core';
 import { SimpleGameState } from './schema/SimpleGameState';
 import { SimplePlayerState } from './schema/SimplePlayerState';
-import { GunState } from './schema/GunState';
 import { SwordState } from './schema/SwordState';
-import { BulletState } from './schema/BulletState';
+import { WeaponState } from './schema/WeaponState';
 import { ArcadePhysics } from 'arcade-physics';
-import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName, GunSpawn, SwordSpawn } from '@nature-game/shared';
+import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName, SwordSpawn } from '@nature-game/shared';
 
 export class SimpleRoom extends Room<SimpleGameState> {
   maxClients = 4;
@@ -14,15 +13,12 @@ export class SimpleRoom extends Room<SimpleGameState> {
   private readonly JUMP_SPEED = 400; // pixels per second
   private readonly PLAYER_WIDTH = 32;
   private readonly PLAYER_HEIGHT = 48;
-  private readonly BULLET_SPEED = 400; // pixels per second
-  private readonly BULLET_GRAVITY = 300; // pixels per second squared
-  private readonly BULLET_INITIAL_ANGLE = -100; // Initial upward velocity (negative = up)
 
   // Arcade Physics objects
   private physics!: ArcadePhysics;
   private platforms: any[] = [];
   private playerBodies: Map<string, any> = new Map();
-  private swordBodies: Map<string, any> = new Map();
+  private weaponBodies: Map<string, any> = new Map();
   private currentMap: MapName = 'simple'; // Default map
   
   // Player color options
@@ -65,9 +61,8 @@ export class SimpleRoom extends Room<SimpleGameState> {
       );
     });
     
-    // Spawn guns and swords based on map configuration
-    this.spawnGuns();
-    this.spawnSwords();
+    // Spawn weapons based on map configuration
+    this.spawnWeapons();
 
     // Server physics update at 60 FPS
     this.setSimulationInterval(() => this.updatePhysics(), 1000/60);
@@ -115,7 +110,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
       }
     });
 
-    // Handle J key action (pickup gun or shoot)
+    // Handle J key action (pickup weapon)
     this.onMessage("shoot", (client, data) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || player.isDead) {
@@ -124,117 +119,30 @@ export class SimpleRoom extends Room<SimpleGameState> {
       }
 
       // If player doesn't have any weapon, try to pick one up
-      if (!player.hasGun && !player.hasSword) {
-        const gunPickedUp = this.tryPickupGun(client.sessionId);
-        if (gunPickedUp) {
-          console.log(`Player ${client.sessionId} picked up a gun with J key`);
+      if (!player.hasSword) {
+        const weaponPickedUp = this.tryPickupWeapon(client.sessionId);
+        if (weaponPickedUp) {
+          console.log(`Player ${client.sessionId} picked up a weapon with J key`);
           return;
         }
         
-        // If no gun was picked up, try to pick up a sword
-        const swordPickedUp = this.tryPickupSword(client.sessionId);
-        if (swordPickedUp) {
-          console.log(`Player ${client.sessionId} picked up a sword with J key`);
-          return;
-        }
-        
-        console.log(`Player ${client.sessionId} tried to pick up gun/sword but none in range`);
+        console.log(`Player ${client.sessionId} tried to pick up weapon but none in range`);
         return;
       }
 
-      // If player has a gun, shoot (swords don't shoot)
-      if (player.hasGun) {
-        const bulletId = `bullet_${client.sessionId}_${Date.now()}`;
-        const bullet = new BulletState();
-        bullet.id = bulletId;
-        bullet.ownerId = client.sessionId;
-        bullet.direction = player.facingDirection;
-        bullet.x = player.x + (player.facingDirection === 'right' ? 32 : -8);
-        bullet.y = player.y + 20;
-        bullet.velocityX = player.facingDirection === 'right' ? this.BULLET_SPEED : -this.BULLET_SPEED;
-        bullet.velocityY = this.BULLET_INITIAL_ANGLE; // Start with upward angle
-
-        this.state.bullets.set(bulletId, bullet);
-        console.log(`Player ${client.sessionId} shot bullet with gun`);
-      } else if (player.hasSword) {
-        console.log(`Player ${client.sessionId} tried to shoot but has sword (swords don't shoot)`);
-      }
+      // Current weapons don't shoot, so just log it
+      console.log(`Player ${client.sessionId} has weapon but it doesn't shoot`);
     });
 
-    // Handle dropping weapon (gun or sword)
+    // Handle dropping weapon
     this.onMessage("dropGun", (client, data) => {
       const player = this.state.players.get(client.sessionId);
-      if (!player || (!player.hasGun && !player.hasSword) || player.isDead) {
-        console.log(`Cannot drop weapon: player ${client.sessionId} - hasGun: ${player?.hasGun}, hasSword: ${player?.hasSword}, isDead: ${player?.isDead}`);
+      if (!player || !player.hasSword || player.isDead) {
+        console.log(`Cannot drop weapon: player ${client.sessionId} - hasSword: ${player?.hasSword}, isDead: ${player?.isDead}`);
         return;
       }
 
-      if (player.hasGun) {
-        // Player drops the gun
-        player.hasGun = false;
-        
-        // Create a new gun entity at player's position
-        const droppedGunId = `dropped_gun_${client.sessionId}_${Date.now()}`;
-        const droppedGun = new GunState();
-        droppedGun.id = droppedGunId;
-        droppedGun.x = player.x + 16; // Center of player
-        droppedGun.y = player.y + 35; // Slightly below player (closer for easier pickup)
-        droppedGun.isPickedUp = false;
-
-        this.state.guns.set(droppedGunId, droppedGun);
-        console.log(`Player ${client.sessionId} dropped gun '${droppedGunId}' at x=${droppedGun.x}, y=${droppedGun.y} (pickupable: ${!droppedGun.isPickedUp})`);
-      } else if (player.hasSword) {
-        // Player drops the sword
-        player.hasSword = false;
-        
-        // Get player's current velocity and add throwing force
-        const playerBody = this.playerBodies.get(client.sessionId);
-        let playerVelX = 0;
-        let playerVelY = 0;
-        if (playerBody) {
-          playerVelX = playerBody.velocity.x;
-          playerVelY = playerBody.velocity.y;
-          
-          // Add throwing force if player is moving
-          if (Math.abs(playerVelX) > 10) { // If player is walking/running
-            playerVelX *= 1.8; // Amplify horizontal momentum for throwing effect
-            playerVelY -= 50; // Add slight upward force for realistic throw arc
-          }
-          
-          // Add minimum throwing force based on facing direction
-          const baseThrowForce = player.facingDirection === 'right' ? 80 : -80;
-          playerVelX += baseThrowForce;
-        }
-        
-        // Create a new sword entity at player's position
-        const droppedSwordId = `dropped_sword_${client.sessionId}_${Date.now()}`;
-        const droppedSword = new SwordState();
-        droppedSword.id = droppedSwordId;
-        droppedSword.x = player.x + 16; // Center of player
-        droppedSword.y = player.y + 35; // Slightly below player
-        droppedSword.isPickedUp = false;
-
-        this.state.swords.set(droppedSwordId, droppedSword);
-        
-        // Create physics body for dropped sword - will be dynamic for falling
-        const swordBody = this.physics.add.body(
-          droppedSword.x - 12, // left edge (sword is 24px wide)
-          droppedSword.y - 3,  // top edge (sword is 6px tall)
-          24,                  // width
-          6                    // height
-        );
-        swordBody.setAllowGravity(true); // Enable gravity for falling
-        swordBody.bounce.set(0.3, 0.3); // Add some bounce
-        
-        // Transfer player's momentum to the sword
-        swordBody.setVelocity(playerVelX, playerVelY);
-        
-        // Note: Friction and drag will be applied manually in the physics update loop
-        
-        this.swordBodies.set(droppedSwordId, swordBody);
-        
-        console.log(`Player ${client.sessionId} dropped sword '${droppedSwordId}' at x=${droppedSword.x}, y=${droppedSword.y} with velocity (${Math.round(playerVelX)}, ${Math.round(playerVelY)}) (pickupable: ${!droppedSword.isPickedUp})`);
-      }
+      this.dropPlayerWeapon(client.sessionId);
     });
 
     // Handle ping requests for latency measurement
@@ -274,7 +182,6 @@ export class SimpleRoom extends Room<SimpleGameState> {
     player.movingRight = false;
     player.color = assignedColor;
     player.facingDirection = "right"; // Default facing direction
-    player.hasGun = false; // No gun initially
     player.isDead = false; // Alive by default
     
     this.state.players.set(client.sessionId, player);
@@ -335,42 +242,10 @@ export class SimpleRoom extends Room<SimpleGameState> {
       }
     });
 
-    // Update sword physics (only for dropped swords with physics bodies)
-    this.swordBodies.forEach((swordBody, swordId) => {
-      const sword = this.state.swords.get(swordId);
-      if (!sword || sword.isPickedUp) return;
+    // Update weapon physics (for dropped weapons with physics bodies)
+    this.updateWeaponPhysics();
 
-      // Add collision between sword and all platforms (so they don't fall through ground)
-      this.platforms.forEach(platform => {
-        this.physics.world.collide(swordBody, platform);
-      });
-
-      // Apply realistic physics - minimal air resistance, strong ground friction
-      const currentVelX = swordBody.velocity.x;
-      const currentVelY = swordBody.velocity.y;
-      
-      // Check if sword is on ground or in air
-      if (swordBody.touching.down || swordBody.blocked.down) {
-        // On ground: Strong friction to slow down sliding
-        const groundFriction = 0.85; // Strong ground friction - loses 15% velocity per frame
-        swordBody.setVelocityX(currentVelX * groundFriction);
-      } else {
-        // In air: Minimal air resistance (realistic physics)
-        const airResistance = 0.99; // Only loses 0.5% velocity per frame in air
-        swordBody.setVelocityX(currentVelX * airResistance);
-      }
-
-      // Update sword position from physics body (center point)
-      sword.x = swordBody.x + 12; // swordBody.x is left edge, sword.x is center
-      sword.y = swordBody.y + 3;  // swordBody.y is top edge, sword.y is center
-
-      // Note: No player collision - players can walk through swords
-    });
-
-    // Note: Gun and sword pickups are now manual (J key), not automatic
-
-    // Update bullets
-    this.updateBullets();
+    // Note: Weapon pickups are now manual (J key), not automatic
   }
 
   private getUniquePlayerColor(): string {
@@ -402,25 +277,9 @@ export class SimpleRoom extends Room<SimpleGameState> {
     return assignedColor;
   }
 
-  private spawnGuns() {
-    const mapConfig = getMapConfig(this.currentMap);
-    
-    // Spawn guns based on map configuration
-    mapConfig.gunSpawns.forEach((gunSpawn: GunSpawn) => {
-      const gun = new GunState();
-      gun.id = gunSpawn.id;
-      gun.x = gunSpawn.x;
-      gun.y = gunSpawn.y;
-      gun.isPickedUp = false;
 
-      this.state.guns.set(gunSpawn.id, gun);
-      console.log(`Gun '${gunSpawn.id}' spawned at x=${gun.x}, y=${gun.y} on ${mapConfig.name}`);
-    });
-    
-    console.log(`Total ${mapConfig.gunSpawns.length} guns spawned on ${mapConfig.name}`);
-  }
 
-  private spawnSwords() {
+  private spawnWeapons() {
     const mapConfig = getMapConfig(this.currentMap);
     
     // Spawn swords based on map configuration
@@ -433,207 +292,183 @@ export class SimpleRoom extends Room<SimpleGameState> {
 
       this.state.swords.set(swordSpawn.id, sword);
       
-      // Note: No physics body for spawned swords - players can walk through them
-      // Physics bodies are only created for dropped swords that need to fall
+      // Create physics body for spawned weapons with gravity disabled initially
+      this.createWeaponPhysicsBody(sword.id, sword, 'sword');
       
       console.log(`Sword '${swordSpawn.id}' spawned at x=${sword.x}, y=${sword.y} on ${mapConfig.name}`);
     });
     
-    console.log(`Total ${mapConfig.swordSpawns.length} swords spawned on ${mapConfig.name}`);
+    console.log(`Total ${mapConfig.swordSpawns.length} weapons spawned on ${mapConfig.name}`);
   }
 
-  private tryPickupGun(playerId: string): boolean {
+
+
+  private tryPickupWeapon(playerId: string): boolean {
     const player = this.state.players.get(playerId);
-    if (!player || player.hasGun || player.hasSword || player.isDead) {
-      return false; // Can't pick up if player has any weapon, is dead, or doesn't exist
+    if (!player || player.hasSword || player.isDead) {
+      return false; // Can't pick up if player has weapon, is dead, or doesn't exist
     }
 
-    // Find the closest available gun
-    let closestGun: { gun: any, gunId: string, distance: number } | null = null;
+    // Find the closest available weapon (currently only swords)
+    let closestWeapon: { weapon: any, weaponId: string, distance: number, type: 'sword' } | null = null;
 
-    this.state.guns.forEach((gun, gunId) => {
-      if (gun.isPickedUp) return; // Skip already picked up guns
+    // Player position is top-left, so calculate center of player
+    const playerCenterX = player.x + this.PLAYER_WIDTH / 2;  // player.x + 16
+    const playerCenterY = player.y + this.PLAYER_HEIGHT / 2; // player.y + 24
 
-      // Check distance to this gun
-      // Player position is top-left, so calculate center of player
-      const playerCenterX = player.x + this.PLAYER_WIDTH / 2;  // player.x + 16
-      const playerCenterY = player.y + this.PLAYER_HEIGHT / 2; // player.y + 24
-      
-      // Gun position is already center, so compare center-to-center
-      const distance = Math.sqrt(
-        Math.pow(playerCenterX - gun.x, 2) + Math.pow(playerCenterY - gun.y, 2)
-      );
-
-      if (distance < 40) { // Within pickup range
-        if (!closestGun || distance < closestGun.distance) {
-          closestGun = { gun, gunId, distance };
-        }
-      }
-    });
-
-    // Pick up the closest gun if found
-    if (closestGun) {
-      closestGun.gun.isPickedUp = true;
-      player.hasGun = true;
-      console.log(`Player ${playerId} picked up gun '${closestGun.gunId}' (distance: ${Math.round(closestGun.distance)})`);
-      return true;
-    }
-
-    return false; // No gun found in range
-  }
-
-  private tryPickupSword(playerId: string): boolean {
-    const player = this.state.players.get(playerId);
-    if (!player || player.hasSword || player.hasGun || player.isDead) {
-      return false; // Can't pick up if player has any weapon, is dead, or doesn't exist
-    }
-
-    // Find the closest available sword
-    let closestSword: { sword: any, swordId: string, distance: number } | null = null;
-
+    // Check swords
     this.state.swords.forEach((sword, swordId) => {
       if (sword.isPickedUp) return; // Skip already picked up swords
 
-      // Check distance to this sword
-      // Player position is top-left, so calculate center of player
-      const playerCenterX = player.x + this.PLAYER_WIDTH / 2;  // player.x + 16
-      const playerCenterY = player.y + this.PLAYER_HEIGHT / 2; // player.y + 24
-      
-      // Sword position is already center, so compare center-to-center
+      // Check distance to this weapon
       const distance = Math.sqrt(
         Math.pow(playerCenterX - sword.x, 2) + Math.pow(playerCenterY - sword.y, 2)
       );
 
       if (distance < 40) { // Within pickup range
-        if (!closestSword || distance < closestSword.distance) {
-          closestSword = { sword, swordId, distance };
+        if (!closestWeapon || distance < closestWeapon.distance) {
+          closestWeapon = { weapon: sword, weaponId: swordId, distance, type: 'sword' };
         }
       }
     });
 
-    // Pick up the closest sword if found
-    if (closestSword) {
-      closestSword.sword.isPickedUp = true;
-      player.hasSword = true;
+    // Pick up the closest weapon if found
+    if (closestWeapon) {
+      closestWeapon.weapon.isPickedUp = true;
       
-      // Remove the sword's physics body if it exists (dropped swords have physics, spawned ones don't)
-      const swordBody = this.swordBodies.get(closestSword.swordId);
-      if (swordBody) {
-        this.physics.world.remove(swordBody);
-        this.swordBodies.delete(closestSword.swordId);
+      if (closestWeapon.type === 'sword') {
+        player.hasSword = true;
       }
       
-      console.log(`Player ${playerId} picked up sword '${closestSword.swordId}' (distance: ${Math.round(closestSword.distance)})`);
+      // Remove the weapon's physics body since it's now picked up
+      const weaponBody = this.weaponBodies.get(closestWeapon.weaponId);
+      if (weaponBody) {
+        this.physics.world.remove(weaponBody);
+        this.weaponBodies.delete(closestWeapon.weaponId);
+      }
+      
+      console.log(`Player ${playerId} picked up ${closestWeapon.type} '${closestWeapon.weaponId}' (distance: ${Math.round(closestWeapon.distance)})`);
       return true;
     }
 
-    return false; // No sword found in range
+    return false; // No weapon found in range
   }
 
-  private updateBullets() {
-    const bulletsToRemove: string[] = [];
-    const deltaTime = 16.666 / 1000; // Convert frame time to seconds
+  private createWeaponPhysicsBody(weaponId: string, weapon: WeaponState, weaponType: string) {
+    // Create physics body for weapon with gravity disabled initially (spawned weapons stay in place)
+    let weaponBody;
+    
+    if (weaponType === 'gun') {
+      // Gun dimensions (adjust as needed)
+      weaponBody = this.physics.add.body(
+        weapon.x - 8,  // left edge (gun is ~16px wide)
+        weapon.y - 4,  // top edge (gun is ~8px tall)
+        16,            // width
+        8              // height
+      );
+    } else {
+      // Sword dimensions (default for other weapons)
+      weaponBody = this.physics.add.body(
+        weapon.x - 12, // left edge (sword is 24px wide)
+        weapon.y - 3,  // top edge (sword is 6px tall)
+        24,            // width
+        6              // height
+      );
+    }
+    
+    weaponBody.setAllowGravity(false); // Spawned weapons don't fall initially
+    weaponBody.bounce.set(0.3, 0.3); // Add some bounce for when they do fall
+    this.weaponBodies.set(weaponId, weaponBody);
+  }
 
-    this.state.bullets.forEach((bullet, bulletId) => {
-      // Apply gravity to vertical velocity
-      bullet.velocityY += this.BULLET_GRAVITY * deltaTime;
+  private updateWeaponPhysics() {
+    this.weaponBodies.forEach((weaponBody, weaponId) => {
+      // Find the weapon in swords (could be extended to other weapon types)
+      let weapon = this.state.swords.get(weaponId);
+      if (!weapon || weapon.isPickedUp) return;
+
+      // Add collision between weapon and all platforms (so they don't fall through ground)
+      this.platforms.forEach(platform => {
+        this.physics.world.collide(weaponBody, platform);
+      });
+
+      // Apply realistic physics - minimal air resistance, strong ground friction
+      const currentVelX = weaponBody.velocity.x;
+      const currentVelY = weaponBody.velocity.y;
       
-      // Update bullet position with both horizontal and vertical movement
-      bullet.x += bullet.velocityX * deltaTime;
-      bullet.y += bullet.velocityY * deltaTime;
-
-      // Remove bullets that are off-screen or hit the ground
-      if (bullet.x < -50 || bullet.x > 850 || bullet.y > 650) {
-        bulletsToRemove.push(bulletId);
-        return;
+      // Check if weapon is on ground or in air
+      if (weaponBody.touching.down || weaponBody.blocked.down) {
+        // On ground: Strong friction to slow down sliding
+        const groundFriction = 0.85; // Strong ground friction - loses 15% velocity per frame
+        weaponBody.setVelocityX(currentVelX * groundFriction);
+      } else {
+        // In air: Minimal air resistance (realistic physics)
+        const airResistance = 0.99; // Only loses 1% velocity per frame in air
+        weaponBody.setVelocityX(currentVelX * airResistance);
       }
 
-      // Check collision with players (simple AABB collision)
-      this.state.players.forEach((player, playerId) => {
-        if (playerId === bullet.ownerId || player.isDead) return; // Skip bullet owner and dead players
-
-        // Simple collision detection
-        if (bullet.x >= player.x && bullet.x <= player.x + 32 && 
-            bullet.y >= player.y && bullet.y <= player.y + 48) {
-          // Player is hit - they die
-          player.isDead = true;
-          if (player.hasGun) {
-            // Drop gun when dead
-            player.hasGun = false;
-            
-            // Create dropped gun at player's position
-            const deathDropGunId = `death_drop_${playerId}_${Date.now()}`;
-            const deathDropGun = new GunState();
-            deathDropGun.id = deathDropGunId;
-            deathDropGun.x = player.x + 16;
-            deathDropGun.y = player.y + 35;
-            deathDropGun.isPickedUp = false;
-            
-            this.state.guns.set(deathDropGunId, deathDropGun);
-            console.log(`Player ${playerId} died and dropped gun '${deathDropGunId}' at x=${deathDropGun.x}, y=${deathDropGun.y}`);
-          }
-          
-          if (player.hasSword) {
-            // Drop sword when dead
-            player.hasSword = false;
-            
-            // Get player's velocity at death and add throwing force
-            const playerBody = this.playerBodies.get(playerId);
-            let playerVelX = 0;
-            let playerVelY = 0;
-            if (playerBody) {
-              playerVelX = playerBody.velocity.x;
-              playerVelY = playerBody.velocity.y;
-              
-              // Add throwing force if player was moving when killed
-              if (Math.abs(playerVelX) > 10) { // If player was walking/running
-                playerVelX *= 1.8; // Amplify horizontal momentum for dramatic death throw
-                playerVelY -= 50; // Add slight upward force for realistic throw arc
-              }
-              
-              // Add minimum throwing force based on facing direction
-              const baseThrowForce = player.facingDirection === 'right' ? 80 : -80;
-              playerVelX += baseThrowForce;
-            }
-            
-            // Create dropped sword at player's position
-            const deathDropSwordId = `death_drop_sword_${playerId}_${Date.now()}`;
-            const deathDropSword = new SwordState();
-            deathDropSword.id = deathDropSwordId;
-            deathDropSword.x = player.x + 16;
-            deathDropSword.y = player.y + 35;
-            deathDropSword.isPickedUp = false;
-            
-            this.state.swords.set(deathDropSwordId, deathDropSword);
-            
-            // Create physics body for death-dropped sword
-            const swordBody = this.physics.add.body(
-              deathDropSword.x - 12, // left edge (sword is 24px wide)
-              deathDropSword.y - 3,  // top edge (sword is 6px tall)
-              24,                    // width
-              6                      // height
-            );
-            swordBody.setAllowGravity(true); // Enable gravity for falling
-            swordBody.bounce.set(0.3, 0.3); // Add some bounce
-            
-            // Transfer player's momentum to the sword (death momentum)
-            swordBody.setVelocity(playerVelX, playerVelY);
-            
-            // Note: Friction and drag will be applied manually in the physics update loop
-            
-            this.swordBodies.set(deathDropSwordId, swordBody);
-            
-            console.log(`Player ${playerId} died and dropped sword '${deathDropSwordId}' at x=${deathDropSword.x}, y=${deathDropSword.y} with velocity (${Math.round(playerVelX)}, ${Math.round(playerVelY)})`);
-          }
-          console.log(`Player ${playerId} was killed by ${bullet.ownerId}'s bullet!`);
-          bulletsToRemove.push(bulletId);
-        }
-      });
+      // Update weapon position from physics body (center point)
+      // For swords and default weapons
+      weapon.x = weaponBody.x + 12; // weaponBody.x is left edge, weapon.x is center
+      weapon.y = weaponBody.y + 3;  // weaponBody.y is top edge, weapon.y is center
     });
+  }
 
-    // Remove bullets
-    bulletsToRemove.forEach(bulletId => {
-      this.state.bullets.delete(bulletId);
-    });
+  private dropPlayerWeapon(playerId: string) {
+    const player = this.state.players.get(playerId);
+    if (!player || !player.hasSword || player.isDead) {
+      return;
+    }
+
+    // Get player's current velocity and add throwing force
+    const playerBody = this.playerBodies.get(playerId);
+    let playerVelX = 0;
+    let playerVelY = 0;
+    if (playerBody) {
+      playerVelX = playerBody.velocity.x;
+      playerVelY = playerBody.velocity.y;
+      
+      // Add throwing force if player is moving
+      if (Math.abs(playerVelX) > 10) { // If player is walking/running
+        playerVelX *= 1.8; // Amplify horizontal momentum for throwing effect
+        playerVelY -= 50; // Add slight upward force for realistic throw arc
+      }
+      
+      // Add minimum throwing force based on facing direction
+      const baseThrowForce = player.facingDirection === 'right' ? 80 : -80;
+      playerVelX += baseThrowForce;
+    }
+
+    if (player.hasSword) {
+      // Player drops the sword
+      player.hasSword = false;
+      
+      // Create a new sword entity at player's position
+      const droppedWeaponId = `dropped_sword_${playerId}_${Date.now()}`;
+      const droppedWeapon = new SwordState();
+      droppedWeapon.id = droppedWeaponId;
+      droppedWeapon.x = player.x + 16; // Center of player
+      droppedWeapon.y = player.y + 35; // Slightly below player
+      droppedWeapon.isPickedUp = false;
+
+      this.state.swords.set(droppedWeaponId, droppedWeapon);
+      
+      // Create physics body for dropped weapon - will be dynamic for falling
+      const weaponBody = this.physics.add.body(
+        droppedWeapon.x - 12, // left edge (sword is 24px wide)
+        droppedWeapon.y - 3,  // top edge (sword is 6px tall)
+        24,                   // width
+        6                     // height
+      );
+      weaponBody.setAllowGravity(true); // Enable gravity for falling
+      weaponBody.bounce.set(0.3, 0.3); // Add some bounce
+      
+      // Transfer player's momentum to the weapon
+      weaponBody.setVelocity(playerVelX, playerVelY);
+      
+      this.weaponBodies.set(droppedWeaponId, weaponBody);
+      
+      console.log(`Player ${playerId} dropped sword '${droppedWeaponId}' at x=${droppedWeapon.x}, y=${droppedWeapon.y} with velocity (${Math.round(playerVelX)}, ${Math.round(playerVelY)}) (pickupable: ${!droppedWeapon.isPickedUp})`);
+    }
   }
 }
