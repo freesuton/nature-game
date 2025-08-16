@@ -5,12 +5,7 @@ export interface Platform {
     height: number;
     type: 'ground' | 'platform';
 }
-export interface GunSpawn {
-    id: string;
-    x: number;
-    y: number;
-}
-export interface SwordSpawn {
+export interface WeaponSpawn {
     id: string;
     x: number;
     y: number;
@@ -24,8 +19,7 @@ export interface MapConfig {
         y: number;
     };
     platforms: Platform[];
-    gunSpawns: GunSpawn[];
-    swordSpawns: SwordSpawn[];
+    weaponSpawns: WeaponSpawn[];
 }
 export declare const SimpleMapConfig: MapConfig;
 export declare const ForestMapConfig: MapConfig;

@@ -10,17 +10,12 @@ interface SimplePlayer {
   movingRight: boolean;
   color: string;
   facingDirection: string;
-  hasGun: boolean;
-  hasSword: boolean;
+  hasWeapon: boolean;
+  weaponType: string;
   isDead: boolean;
 }
 
-interface SimpleGun {
-  id: string;
-  x: number;
-  y: number;
-  isPickedUp: boolean;
-}
+
 
 interface SimpleBullet {
   id: string;
@@ -37,10 +32,8 @@ export class SimpleScene extends Phaser.Scene {
   private room!: Colyseus.Room;
   private players: Map<string, SimplePlayerConfig> = new Map();
   private playerCoordTexts: Map<string, Phaser.GameObjects.Text> = new Map();
-  private guns: Map<string, Phaser.GameObjects.Rectangle> = new Map();
-  private gunLabels: Map<string, Phaser.GameObjects.Text> = new Map();
-  private swords: Map<string, Phaser.GameObjects.Rectangle> = new Map();
-  private swordLabels: Map<string, Phaser.GameObjects.Text> = new Map();
+  private weapons: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+  private weaponLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private bullets: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private wasdKeys!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
   private jKey!: Phaser.Input.Keyboard.Key;
@@ -49,7 +42,6 @@ export class SimpleScene extends Phaser.Scene {
   private mapInitialized = false;
   private mapNameText?: Phaser.GameObjects.Text;
   private playerCountText?: Phaser.GameObjects.Text;
-  private gunStatusText?: Phaser.GameObjects.Text;
   private lagText?: Phaser.GameObjects.Text;
   private centerCoordsText?: Phaser.GameObjects.Text;
   private platformVisuals: Phaser.GameObjects.Rectangle[] = [];
@@ -124,14 +116,6 @@ export class SimpleScene extends Phaser.Scene {
     this.playerCountText = this.add.text(16, 16, 'Players: 0', {
       fontSize: '16px',
       color: '#FFFFFF',
-      backgroundColor: '#000000',
-      padding: { x: 8, y: 4 }
-    }).setScrollFactor(0).setDepth(1000);
-
-    // Gun status indicator
-    this.gunStatusText = this.add.text(16, 48, 'Gun: Available', {
-      fontSize: '14px',
-      color: '#00FF00',
       backgroundColor: '#000000',
       padding: { x: 8, y: 4 }
     }).setScrollFactor(0).setDepth(1000);
@@ -256,7 +240,7 @@ export class SimpleScene extends Phaser.Scene {
 
         // Listen for changes to this specific player
         (player as any).onChange(() => {
-          console.log(`Player ${sessionId} update: x=${player.x}, y=${player.y}, left=${player.movingLeft}, right=${player.movingRight}, facing=${player.facingDirection}, hasGun=${player.hasGun}, isDead=${player.isDead}`);
+          console.log(`Player ${sessionId} update: x=${player.x}, y=${player.y}, left=${player.movingLeft}, right=${player.movingRight}, facing=${player.facingDirection}, hasWeapon=${player.hasWeapon}, weaponType=${player.weaponType}, isDead=${player.isDead}`);
           
           // Get SimplePlayerConfig instance
           const simplePlayer = this.players.get(sessionId);
@@ -288,25 +272,19 @@ export class SimpleScene extends Phaser.Scene {
             simplePlayer.sprite.setAlpha(1.0);
           }
           
-          // Update name text to show gun, sword and death status
+          // Update name text to show weapon and death status
           const baseName = isMyPlayer ? `You (P${playerIndex})` : `Player ${playerIndex}`;
-          const gunStatus = player.hasGun ? ' [GUN]' : '';
-          const swordStatus = player.hasSword ? ' [SWORD]' : '';
+          const weaponStatus = player.hasWeapon ? ` [${player.weaponType.toUpperCase()}]` : '';
           const deathStatus = player.isDead ? ' [DEAD]' : '';
-          simplePlayer.nameText.setText(baseName + gunStatus + swordStatus + deathStatus);
+          simplePlayer.nameText.setText(baseName + weaponStatus + deathStatus);
           
           if (player.isDead) {
             simplePlayer.nameText.setColor('#FF0000'); // Red if dead
-          } else if (player.hasGun) {
-            simplePlayer.nameText.setColor('#00FF00'); // Green if has gun
-          } else if (player.hasSword) {
-            simplePlayer.nameText.setColor('#4169E1'); // Blue if has sword
+          } else if (player.hasWeapon) {
+            simplePlayer.nameText.setColor('#4169E1'); // Blue if has weapon
           } else {
             simplePlayer.nameText.setColor('#FFFFFF'); // White if normal
           }
-          
-          // Update global gun status display
-          this.updateGunStatusDisplay();
         });
       });
 
@@ -328,108 +306,64 @@ export class SimpleScene extends Phaser.Scene {
         }
         
         this.updatePlayerCount();
-        this.updateGunStatusDisplay();
       });
 
-      // When a gun is added
-      this.room.state.guns.onAdd((gun: SimpleGun, gunId: string) => {
-        console.log('Gun added:', gunId, 'at', gun.x, gun.y);
-        
-        // Create visual gun (brown/gray rectangle with white outline)
-        const gunRect = this.add.rectangle(gun.x, gun.y, 20, 10, 0x8B4513)
-        gunRect.setStrokeStyle(2, 0xFFFFFF);
-        this.guns.set(gunId, gunRect);
 
-        // Create gun label above the gun
-        const gunLabel = this.add.text(gun.x, gun.y - 20, 'GUN', {
+
+      // When a weapon is added
+      this.room.state.weapons.onAdd((weapon: any, weaponId: string) => {
+        console.log('Weapon added:', weaponId, 'at', weapon.x, weapon.y, 'type:', weapon.weaponType);
+        
+        // Create visual weapon (color based on type)
+        const weaponColor = 0xC0C0C0; // Silver for weapons
+        const strokeColor = 0x4169E1; // Blue for weapons
+        const weaponRect = this.add.rectangle(weapon.x, weapon.y, 24, 6, weaponColor)
+        weaponRect.setStrokeStyle(2, strokeColor);
+        this.weapons.set(weaponId, weaponRect);
+
+        // Create weapon label above the weapon
+        const labelText = weapon.weaponType.toUpperCase();
+        const labelColor = '#4169E1'; // Blue for weapons
+        const weaponLabel = this.add.text(weapon.x, weapon.y - 20, labelText, {
           fontSize: '12px',
-          color: '#FFFF00',
+          color: labelColor,
           backgroundColor: '#000000',
           padding: { x: 4, y: 2 }
         });
-        gunLabel.setOrigin(0.5, 0.5);
-        this.gunLabels.set(gunId, gunLabel);
+        weaponLabel.setOrigin(0.5, 0.5);
+        this.weaponLabels.set(weaponId, weaponLabel);
 
-        // Listen for gun changes (pickup)
-        (gun as any).onChange(() => {
-          const gunRect = this.guns.get(gunId);
-          const gunLabel = this.gunLabels.get(gunId);
-          if (gunRect && gunLabel && gun.isPickedUp) {
-            // Hide gun and label when picked up
-            gunRect.setVisible(false);
-            gunLabel.setVisible(false);
-          }
-          // Update gun status display when gun changes
-          this.updateGunStatusDisplay();
-        });
-      });
-
-      // When a gun is removed
-      this.room.state.guns.onRemove((_gun: SimpleGun, gunId: string) => {
-        console.log('Gun removed:', gunId);
-        
-        const gunRect = this.guns.get(gunId);
-        const gunLabel = this.gunLabels.get(gunId);
-        if (gunRect) {
-          gunRect.destroy();
-          this.guns.delete(gunId);
-        }
-        if (gunLabel) {
-          gunLabel.destroy();
-          this.gunLabels.delete(gunId);
-        }
-      });
-
-      // When a sword is added
-      this.room.state.swords.onAdd((sword: any, swordId: string) => {
-        console.log('Sword added:', swordId, 'at', sword.x, sword.y);
-        
-        // Create visual sword (silver/blue rectangle with white outline)
-        const swordRect = this.add.rectangle(sword.x, sword.y, 24, 6, 0xC0C0C0)
-        swordRect.setStrokeStyle(2, 0x4169E1);
-        this.swords.set(swordId, swordRect);
-
-        // Create sword label above the sword
-        const swordLabel = this.add.text(sword.x, sword.y - 20, 'SWORD', {
-          fontSize: '12px',
-          color: '#4169E1',
-          backgroundColor: '#000000',
-          padding: { x: 4, y: 2 }
-        });
-        swordLabel.setOrigin(0.5, 0.5);
-        this.swordLabels.set(swordId, swordLabel);
-
-        // Listen for sword changes (pickup/position)
-        (sword as any).onChange(() => {
-          const swordRect = this.swords.get(swordId);
-          const swordLabel = this.swordLabels.get(swordId);
-          if (swordRect && swordLabel && sword.isPickedUp) {
-            // Hide sword and label when picked up
-            swordRect.setVisible(false);
-            swordLabel.setVisible(false);
-          } else if (swordRect && swordLabel && !sword.isPickedUp) {
+        // Listen for weapon changes (pickup/position)
+        (weapon as any).onChange(() => {
+          const weaponRect = this.weapons.get(weaponId);
+          const weaponLabel = this.weaponLabels.get(weaponId);
+          if (weaponRect && weaponLabel && weapon.isPickedUp) {
+            // Hide weapon and label when picked up
+            weaponRect.setVisible(false);
+            weaponLabel.setVisible(false);
+          } else if (weaponRect && weaponLabel && !weapon.isPickedUp) {
             // Show and update position when available
-            swordRect.setVisible(true);
-            swordLabel.setVisible(true);
-            swordRect.setPosition(sword.x, sword.y);
-            swordLabel.setPosition(sword.x, sword.y - 20);
+            weaponRect.setVisible(true);
+            weaponLabel.setVisible(true);
+            weaponRect.setPosition(weapon.x, weapon.y);
+            weaponLabel.setPosition(weapon.x, weapon.y - 20);
           }
         });
       });
 
-      // When a sword is removed
-      this.room.state.swords.onRemove((_sword: any, swordId: string) => {
-        console.log('Sword removed:', swordId);
+      // When a weapon is removed
+      this.room.state.weapons.onRemove((_weapon: any, weaponId: string) => {
+        console.log('Weapon removed:', weaponId);
         
-        const swordRect = this.swords.get(swordId);
-        const swordLabel = this.swordLabels.get(swordId);
-        if (swordRect) {
-          swordRect.destroy();
-          this.swords.delete(swordId);
+        const weaponRect = this.weapons.get(weaponId);
+        const weaponLabel = this.weaponLabels.get(weaponId);
+        if (weaponRect) {
+          weaponRect.destroy();
+          this.weapons.delete(weaponId);
         }
-        if (swordLabel) {
-          swordLabel.destroy();
-          this.swordLabels.delete(swordId);
+        if (weaponLabel) {
+          weaponLabel.destroy();
+          this.weaponLabels.delete(weaponId);
         }
       });
 
@@ -506,7 +440,7 @@ export class SimpleScene extends Phaser.Scene {
 
     // Handle drop weapon input (K key)
     if (Phaser.Input.Keyboard.JustDown(this.kKey)) {
-      this.room.send('dropGun', {});
+      this.room.send('dropWeapon', {});
     }
   }
 
@@ -530,15 +464,11 @@ export class SimpleScene extends Phaser.Scene {
     this.platformVisuals.forEach(visual => visual.destroy());
     this.platformVisuals = [];
     
-    // Clean up guns, swords, labels, and bullets
-    this.guns.forEach(gun => gun.destroy());
-    this.guns.clear();
-    this.gunLabels.forEach(label => label.destroy());
-    this.gunLabels.clear();
-    this.swords.forEach(sword => sword.destroy());
-    this.swords.clear();
-    this.swordLabels.forEach(label => label.destroy());
-    this.swordLabels.clear();
+    // Clean up weapons, labels, and bullets
+    this.weapons.forEach(weapon => weapon.destroy());
+    this.weapons.clear();
+    this.weaponLabels.forEach(label => label.destroy());
+    this.weaponLabels.clear();
     this.bullets.forEach(bullet => bullet.destroy());
     this.bullets.clear();
     
@@ -627,40 +557,7 @@ export class SimpleScene extends Phaser.Scene {
     }
   }
 
-  private updateGunStatusDisplay() {
-    if (!this.gunStatusText || !this.room || !this.room.state) return;
 
-    // Check if any player has the gun
-    let gunHolder: string | null = null;
-    this.room.state.players.forEach((player: SimplePlayer, sessionId: string) => {
-      if (player.hasGun && !player.isDead) {
-        // Find the player index for display
-        const playerIndex = Array.from(this.room.state.players.keys()).indexOf(sessionId) + 1;
-        const isMyPlayer = sessionId === this.room.sessionId;
-        gunHolder = isMyPlayer ? 'You' : `P${playerIndex}`;
-      }
-    });
-
-    // Check if gun is available on the ground
-    let gunOnGround = false;
-    this.room.state.guns.forEach((gun: SimpleGun) => {
-      if (!gun.isPickedUp) {
-        gunOnGround = true;
-      }
-    });
-
-    // Update display text and color
-    if (gunHolder) {
-      this.gunStatusText.setText(`Gun: ${gunHolder} has it`);
-      this.gunStatusText.setColor('#FF6B6B'); // Red when someone has it
-    } else if (gunOnGround) {
-      this.gunStatusText.setText('Gun: Available');
-      this.gunStatusText.setColor('#00FF00'); // Green when available
-    } else {
-      this.gunStatusText.setText('Gun: None');
-      this.gunStatusText.setColor('#FFFF00'); // Yellow when none
-    }
-  }
 
   private startPingMonitoring() {
     // Send initial ping

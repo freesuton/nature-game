@@ -1,10 +1,9 @@
 import { Room, Client } from '@colyseus/core';
 import { SimpleGameState } from './schema/SimpleGameState';
 import { SimplePlayerState } from './schema/SimplePlayerState';
-import { SwordState } from './schema/SwordState';
 import { WeaponState } from './schema/WeaponState';
 import { ArcadePhysics } from 'arcade-physics';
-import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName, SwordSpawn } from '@nature-game/shared';
+import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName, WeaponSpawn } from '@nature-game/shared';
 
 export class SimpleRoom extends Room<SimpleGameState> {
   maxClients = 4;
@@ -119,7 +118,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
       }
 
       // If player doesn't have any weapon, try to pick one up
-      if (!player.hasSword) {
+      if (!player.hasWeapon) {
         const weaponPickedUp = this.tryPickupWeapon(client.sessionId);
         if (weaponPickedUp) {
           console.log(`Player ${client.sessionId} picked up a weapon with J key`);
@@ -135,10 +134,10 @@ export class SimpleRoom extends Room<SimpleGameState> {
     });
 
     // Handle dropping weapon
-    this.onMessage("dropGun", (client, data) => {
+    this.onMessage("dropWeapon", (client, data) => {
       const player = this.state.players.get(client.sessionId);
-      if (!player || !player.hasSword || player.isDead) {
-        console.log(`Cannot drop weapon: player ${client.sessionId} - hasSword: ${player?.hasSword}, isDead: ${player?.isDead}`);
+      if (!player || !player.hasWeapon || player.isDead) {
+        console.log(`Cannot drop weapon: player ${client.sessionId} - hasWeapon: ${player?.hasWeapon}, isDead: ${player?.isDead}`);
         return;
       }
 
@@ -282,52 +281,53 @@ export class SimpleRoom extends Room<SimpleGameState> {
   private spawnWeapons() {
     const mapConfig = getMapConfig(this.currentMap);
     
-    // Spawn swords based on map configuration
-    mapConfig.swordSpawns.forEach((swordSpawn: SwordSpawn) => {
-      const sword = new SwordState();
-      sword.id = swordSpawn.id;
-      sword.x = swordSpawn.x;
-      sword.y = swordSpawn.y;
-      sword.isPickedUp = false;
+    // Spawn weapons based on map configuration
+    mapConfig.weaponSpawns.forEach((weaponSpawn: WeaponSpawn) => {
+      const weapon = new WeaponState();
+      weapon.id = weaponSpawn.id;
+      weapon.x = weaponSpawn.x;
+      weapon.y = weaponSpawn.y;
+      weapon.isPickedUp = false;
+      weapon.weaponType = 'weapon'; // Default weapon type
 
-      this.state.swords.set(swordSpawn.id, sword);
+      this.state.weapons.set(weaponSpawn.id, weapon);
       
       // Create physics body for spawned weapons with gravity disabled initially
-      this.createWeaponPhysicsBody(sword.id, sword, 'sword');
+      this.createWeaponPhysicsBody(weapon.id, weapon, 'weapon');
       
-      console.log(`Sword '${swordSpawn.id}' spawned at x=${sword.x}, y=${sword.y} on ${mapConfig.name}`);
+      console.log(`Weapon '${weaponSpawn.id}' (${weapon.weaponType}) spawned at x=${weapon.x}, y=${weapon.y} on ${mapConfig.name}`);
     });
     
-    console.log(`Total ${mapConfig.swordSpawns.length} weapons spawned on ${mapConfig.name}`);
+    console.log(`Total ${mapConfig.weaponSpawns.length} weapons spawned on ${mapConfig.name}`);
   }
 
 
 
   private tryPickupWeapon(playerId: string): boolean {
     const player = this.state.players.get(playerId);
-    if (!player || player.hasSword || player.isDead) {
+    if (!player || player.hasWeapon || player.isDead) {
       return false; // Can't pick up if player has weapon, is dead, or doesn't exist
     }
 
-    // Find the closest available weapon (currently only swords)
-    let closestWeapon: { weapon: any, weaponId: string, distance: number, type: 'sword' } | null = null;
+    // Find the closest available weapon
+    let closestWeapon: { weapon: any, weaponId: string, distance: number, type: string } | null = null;
 
     // Player position is top-left, so calculate center of player
     const playerCenterX = player.x + this.PLAYER_WIDTH / 2;  // player.x + 16
     const playerCenterY = player.y + this.PLAYER_HEIGHT / 2; // player.y + 24
 
-    // Check swords
-    this.state.swords.forEach((sword, swordId) => {
-      if (sword.isPickedUp) return; // Skip already picked up swords
+    // Check weapons
+    this.state.weapons.forEach((weapon, weaponId) => {
+      if (weapon.isPickedUp) return; // Skip already picked up weapons
 
       // Check distance to this weapon
       const distance = Math.sqrt(
-        Math.pow(playerCenterX - sword.x, 2) + Math.pow(playerCenterY - sword.y, 2)
+        Math.pow(playerCenterX - weapon.x, 2) + Math.pow(playerCenterY - weapon.y, 2)
       );
 
       if (distance < 40) { // Within pickup range
         if (!closestWeapon || distance < closestWeapon.distance) {
-          closestWeapon = { weapon: sword, weaponId: swordId, distance, type: 'sword' };
+          closestWeapon = { weapon: weapon, weaponId: weaponId, distance, type: weapon.weaponType };
         }
       }
     });
@@ -336,9 +336,9 @@ export class SimpleRoom extends Room<SimpleGameState> {
     if (closestWeapon) {
       closestWeapon.weapon.isPickedUp = true;
       
-      if (closestWeapon.type === 'sword') {
-        player.hasSword = true;
-      }
+      // Set player weapon status
+      player.hasWeapon = true;
+      player.weaponType = closestWeapon.type;
       
       // Remove the weapon's physics body since it's now picked up
       const weaponBody = this.weaponBodies.get(closestWeapon.weaponId);
@@ -356,25 +356,12 @@ export class SimpleRoom extends Room<SimpleGameState> {
 
   private createWeaponPhysicsBody(weaponId: string, weapon: WeaponState, weaponType: string) {
     // Create physics body for weapon with gravity disabled initially (spawned weapons stay in place)
-    let weaponBody;
-    
-    if (weaponType === 'gun') {
-      // Gun dimensions (adjust as needed)
-      weaponBody = this.physics.add.body(
-        weapon.x - 8,  // left edge (gun is ~16px wide)
-        weapon.y - 4,  // top edge (gun is ~8px tall)
-        16,            // width
-        8              // height
-      );
-    } else {
-      // Sword dimensions (default for other weapons)
-      weaponBody = this.physics.add.body(
-        weapon.x - 12, // left edge (sword is 24px wide)
-        weapon.y - 3,  // top edge (sword is 6px tall)
-        24,            // width
-        6              // height
-      );
-    }
+    const weaponBody = this.physics.add.body(
+      weapon.x - 12, // left edge (weapon is 24px wide)
+      weapon.y - 3,  // top edge (weapon is 6px tall)
+      24,            // width
+      6              // height
+    );
     
     weaponBody.setAllowGravity(false); // Spawned weapons don't fall initially
     weaponBody.bounce.set(0.3, 0.3); // Add some bounce for when they do fall
@@ -383,8 +370,8 @@ export class SimpleRoom extends Room<SimpleGameState> {
 
   private updateWeaponPhysics() {
     this.weaponBodies.forEach((weaponBody, weaponId) => {
-      // Find the weapon in swords (could be extended to other weapon types)
-      let weapon = this.state.swords.get(weaponId);
+      // Find the weapon in weapons collection
+      let weapon = this.state.weapons.get(weaponId);
       if (!weapon || weapon.isPickedUp) return;
 
       // Add collision between weapon and all platforms (so they don't fall through ground)
@@ -408,7 +395,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
       }
 
       // Update weapon position from physics body (center point)
-      // For swords and default weapons
+      // For weapons
       weapon.x = weaponBody.x + 12; // weaponBody.x is left edge, weapon.x is center
       weapon.y = weaponBody.y + 3;  // weaponBody.y is top edge, weapon.y is center
     });
@@ -416,7 +403,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
 
   private dropPlayerWeapon(playerId: string) {
     const player = this.state.players.get(playerId);
-    if (!player || !player.hasSword || player.isDead) {
+    if (!player || !player.hasWeapon || player.isDead) {
       return;
     }
 
@@ -439,24 +426,29 @@ export class SimpleRoom extends Room<SimpleGameState> {
       playerVelX += baseThrowForce;
     }
 
-    if (player.hasSword) {
-      // Player drops the sword
-      player.hasSword = false;
+    if (player.hasWeapon) {
+      // Get the weapon type before dropping
+      const weaponType = player.weaponType;
       
-      // Create a new sword entity at player's position
-      const droppedWeaponId = `dropped_sword_${playerId}_${Date.now()}`;
-      const droppedWeapon = new SwordState();
+      // Player drops the weapon
+      player.hasWeapon = false;
+      player.weaponType = "";
+      
+      // Create a new weapon entity at player's position
+      const droppedWeaponId = `dropped_${weaponType}_${playerId}_${Date.now()}`;
+      const droppedWeapon = new WeaponState();
       droppedWeapon.id = droppedWeaponId;
       droppedWeapon.x = player.x + 16; // Center of player
       droppedWeapon.y = player.y + 35; // Slightly below player
       droppedWeapon.isPickedUp = false;
+      droppedWeapon.weaponType = weaponType;
 
-      this.state.swords.set(droppedWeaponId, droppedWeapon);
+      this.state.weapons.set(droppedWeaponId, droppedWeapon);
       
       // Create physics body for dropped weapon - will be dynamic for falling
       const weaponBody = this.physics.add.body(
-        droppedWeapon.x - 12, // left edge (sword is 24px wide)
-        droppedWeapon.y - 3,  // top edge (sword is 6px tall)
+        droppedWeapon.x - 12, // left edge (weapon is 24px wide)
+        droppedWeapon.y - 3,  // top edge (weapon is 6px tall)
         24,                   // width
         6                     // height
       );
@@ -468,7 +460,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
       
       this.weaponBodies.set(droppedWeaponId, weaponBody);
       
-      console.log(`Player ${playerId} dropped sword '${droppedWeaponId}' at x=${droppedWeapon.x}, y=${droppedWeapon.y} with velocity (${Math.round(playerVelX)}, ${Math.round(playerVelY)}) (pickupable: ${!droppedWeapon.isPickedUp})`);
+      console.log(`Player ${playerId} dropped ${weaponType} '${droppedWeaponId}' at x=${droppedWeapon.x}, y=${droppedWeapon.y} with velocity (${Math.round(playerVelX)}, ${Math.round(playerVelY)}) (pickupable: ${!droppedWeapon.isPickedUp})`);
     }
   }
 }
