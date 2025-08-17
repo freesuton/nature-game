@@ -139,8 +139,9 @@ export class SimpleRoom extends Room<SimpleGameState> {
         this.createBullet(client.sessionId);
         console.log(`Player ${client.sessionId} fired ${weaponTemplate.weaponName}`);
       } else {
-        // Melee weapon - perform attack
-        console.log(`Player ${client.sessionId} used ${weaponTemplate.weaponName} (melee attack)`);
+        // Melee weapon - perform swing attack
+        this.performMeleeAttack(client.sessionId, weaponTemplate);
+        console.log(`Player ${client.sessionId} swung ${weaponTemplate.weaponName} with range ${weaponTemplate.attackRange}`);
       }
     });
 
@@ -305,6 +306,69 @@ export class SimpleRoom extends Room<SimpleGameState> {
       this.state.bullets.delete(bulletId);
       console.log(`Bullet '${bulletId}' expired`);
     }, 3000);
+  }
+
+  private performMeleeAttack(playerId: string, weaponTemplate: WeaponState) {
+    const player = this.state.players.get(playerId);
+    if (!player || !player.hasWeapon) {
+      return;
+    }
+
+    // Create a melee attack area with semicircle
+    const attackId = `melee_${playerId}_${Date.now()}`;
+    const playerCenterX = player.x + (this.PLAYER_WIDTH / 2);
+    const playerCenterY = player.y + (this.PLAYER_HEIGHT / 2);
+    
+    // Create attack data for client visualization
+    const attackData = {
+      id: attackId,
+      playerId: playerId,
+      x: playerCenterX,
+      y: playerCenterY,
+      range: weaponTemplate.attackRange,
+      direction: player.facingDirection,
+      weaponName: weaponTemplate.weaponName
+    };
+    
+    // Send melee attack effect to all clients for visualization
+    this.broadcast('meleeAttack', attackData);
+    
+    // Check for targets within the swing area (semicircle)
+    this.state.players.forEach((targetPlayer, targetId) => {
+      if (targetId === playerId || targetPlayer.isDead) return; // Skip self and dead players
+      
+      const targetCenterX = targetPlayer.x + (this.PLAYER_WIDTH / 2);
+      const targetCenterY = targetPlayer.y + (this.PLAYER_HEIGHT / 2);
+      
+      // Calculate distance
+      const distance = Math.sqrt(
+        Math.pow(targetCenterX - playerCenterX, 2) + 
+        Math.pow(targetCenterY - playerCenterY, 2)
+      );
+      
+      // Check if target is within range
+      if (distance <= weaponTemplate.attackRange) {
+        // Calculate angle to target
+        const angleToTarget = Math.atan2(targetCenterY - playerCenterY, targetCenterX - playerCenterX);
+        
+        // Check if target is in the semicircle facing direction
+        let inAttackArea = false;
+        if (player.facingDirection === 'right') {
+          // Right facing: -90° to +90° (right semicircle)
+          inAttackArea = angleToTarget >= -Math.PI/2 && angleToTarget <= Math.PI/2;
+        } else {
+          // Left facing: 90° to 270° (left semicircle)
+          inAttackArea = angleToTarget >= Math.PI/2 || angleToTarget <= -Math.PI/2;
+        }
+        
+        if (inAttackArea) {
+          console.log(`Player ${playerId} hit player ${targetId} with melee attack!`);
+          // Here you could add damage logic later
+        }
+      }
+    });
+    
+    console.log(`Melee attack by player ${playerId} at (${playerCenterX}, ${playerCenterY}) facing ${player.facingDirection} with range ${weaponTemplate.attackRange}`);
   }
 
   private updateBulletPhysics() {

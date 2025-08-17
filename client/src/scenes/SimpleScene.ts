@@ -35,6 +35,7 @@ export class SimpleScene extends Phaser.Scene {
   private weapons: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private weaponLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private bullets: Map<string, Phaser.GameObjects.Rectangle> = new Map();
+  private meleeAttacks: Map<string, Phaser.GameObjects.Arc> = new Map();
   private wasdKeys!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
   private jKey!: Phaser.Input.Keyboard.Key;
   private kKey!: Phaser.Input.Keyboard.Key;
@@ -412,6 +413,11 @@ export class SimpleScene extends Phaser.Scene {
         this.updatePing(pingTime);
       });
 
+      // Handle melee attack visualization
+      this.room.onMessage('meleeAttack', (data: any) => {
+        this.showMeleeAttack(data);
+      });
+
     } catch (error) {
       console.error('Failed to connect to server:', error);
     }
@@ -464,13 +470,15 @@ export class SimpleScene extends Phaser.Scene {
     this.platformVisuals.forEach(visual => visual.destroy());
     this.platformVisuals = [];
     
-    // Clean up weapons, labels, and bullets
+    // Clean up weapons, labels, bullets, and sword swings
     this.weapons.forEach(weapon => weapon.destroy());
     this.weapons.clear();
     this.weaponLabels.forEach(label => label.destroy());
     this.weaponLabels.clear();
     this.bullets.forEach(bullet => bullet.destroy());
     this.bullets.clear();
+    this.meleeAttacks.forEach(attack => attack.destroy());
+    this.meleeAttacks.clear();
     
     // Clean up coordinate texts
     this.playerCoordTexts.forEach(coordText => coordText.destroy());
@@ -606,5 +614,41 @@ export class SimpleScene extends Phaser.Scene {
 
     this.lagText.setText(`${ping}ms`);
     this.lagText.setColor(color);
+  }
+
+  private showMeleeAttack(data: any) {
+    console.log('Melee attack visualization:', data);
+    
+    // Create semicircle arc for attack visualization
+    const attackArc = this.add.arc(data.x, data.y, data.range, 0, 0, false, 0xFFFF00); // Yellow semicircle
+    attackArc.setStrokeStyle(3, 0xFFFF00);
+    attackArc.setAlpha(0.7);
+    
+    // Set the arc to show a semicircle based on direction
+    if (data.direction === 'right') {
+      // Right facing: -90° to +90° semicircle
+      attackArc.setStartAngle(-90);
+      attackArc.setEndAngle(90);
+    } else {
+      // Left facing: 90° to 270° semicircle  
+      attackArc.setStartAngle(90);
+      attackArc.setEndAngle(270);
+    }
+    
+    this.meleeAttacks.set(data.id, attackArc);
+    
+    // Add attack animation (scale up and fade out)
+    this.tweens.add({
+      targets: attackArc,
+      scaleX: 1.2,
+      scaleY: 1.2,
+      alpha: 0,
+      duration: 300,
+      ease: 'Power2',
+      onComplete: () => {
+        attackArc.destroy();
+        this.meleeAttacks.delete(data.id);
+      }
+    });
   }
 }
