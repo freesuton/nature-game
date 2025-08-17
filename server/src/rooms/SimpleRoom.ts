@@ -2,6 +2,7 @@ import { Room, Client } from '@colyseus/core';
 import { SimpleGameState } from './schema/SimpleGameState';
 import { SimplePlayerState } from './schema/SimplePlayerState';
 import { WeaponState } from './schema/WeaponState';
+import { BulletState } from './schema/BulletState';
 import { ArcadePhysics } from 'arcade-physics';
 import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapName, WeaponSpawn } from '@nature-game/shared';
 
@@ -129,8 +130,18 @@ export class SimpleRoom extends Room<SimpleGameState> {
         return;
       }
 
-      // Current weapons don't shoot, so just log it
-      console.log(`Player ${client.sessionId} has weapon but it doesn't shoot`);
+      // Check if player's weapon is long range
+      const weaponType = player.weaponType;
+      const weaponTemplate = new WeaponState(weaponType);
+      
+      if (weaponTemplate.bulletState) {
+        // Long range weapon - create and shoot bullet
+        this.createBullet(client.sessionId);
+        console.log(`Player ${client.sessionId} fired ${weaponTemplate.weaponName}`);
+      } else {
+        // Melee weapon - perform attack
+        console.log(`Player ${client.sessionId} used ${weaponTemplate.weaponName} (melee attack)`);
+      }
     });
 
     // Handle dropping weapon
@@ -244,7 +255,70 @@ export class SimpleRoom extends Room<SimpleGameState> {
     // Update weapon physics (for dropped weapons with physics bodies)
     this.updateWeaponPhysics();
 
+    // Update bullet physics (move bullets)
+    this.updateBulletPhysics();
+
     // Note: Weapon pickups are now manual (J key), not automatic
+  }
+
+  private createBullet(playerId: string) {
+    const player = this.state.players.get(playerId);
+    if (!player || !player.hasWeapon) {
+      return;
+    }
+
+    // Create weapon template to check if it has bulletState
+    const weaponTemplate = new WeaponState(player.weaponType);
+    
+    if (!weaponTemplate.bulletState) {
+      return; // This weapon doesn't shoot bullets
+    }
+
+    // Create bullet
+    const bulletId = `bullet_${playerId}_${Date.now()}`;
+    const bullet = new BulletState();
+    bullet.id = bulletId;
+    bullet.ownerId = playerId;
+    
+    // Position bullet at player location
+    bullet.x = player.x + (this.PLAYER_WIDTH / 2); // Center of player
+    bullet.y = player.y + (this.PLAYER_HEIGHT / 2);
+    
+    // Set bullet velocity based on player facing direction
+    const bulletSpeed = 400; // Bullet speed
+    if (player.facingDirection === "left") {
+      bullet.velocityX = -bulletSpeed;
+      bullet.direction = "left";
+    } else {
+      bullet.velocityX = bulletSpeed;
+      bullet.direction = "right";
+    }
+    bullet.velocityY = 0; // Straight horizontal shot
+    
+    // Add bullet to game state
+    this.state.bullets.set(bulletId, bullet);
+    
+    console.log(`Bullet '${bulletId}' created for player ${playerId} going ${bullet.direction}`);
+    
+    // Remove bullet after 3 seconds
+    this.clock.setTimeout(() => {
+      this.state.bullets.delete(bulletId);
+      console.log(`Bullet '${bulletId}' expired`);
+    }, 3000);
+  }
+
+  private updateBulletPhysics() {
+    this.state.bullets.forEach((bullet, bulletId) => {
+      // Move bullet based on velocity
+      bullet.x += bullet.velocityX * (16.666 / 1000); // Move based on frame time
+      bullet.y += bullet.velocityY * (16.666 / 1000);
+      
+      // Remove bullet if it goes off screen
+      if (bullet.x < -50 || bullet.x > 850 || bullet.y < -50 || bullet.y > 650) {
+        this.state.bullets.delete(bulletId);
+        console.log(`Bullet '${bulletId}' went off screen and was removed`);
+      }
+    });
   }
 
   private getUniquePlayerColor(): string {
