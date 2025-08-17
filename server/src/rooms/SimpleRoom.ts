@@ -110,7 +110,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
     });
 
     // Handle J key action (pickup weapon)
-    this.onMessage("shoot", (client, data) => {
+    this.onMessage("useWeapon", (client, data) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || player.isDead) {
         console.log(`Cannot perform action: player ${client.sessionId} is dead or doesn't exist`);

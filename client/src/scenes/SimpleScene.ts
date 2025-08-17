@@ -156,7 +156,7 @@ export class SimpleScene extends Phaser.Scene {
     // Setup WASD input
     this.wasdKeys = this.input.keyboard!.addKeys('W,S,A,D') as any;
 
-    // Setup J key for shooting
+    // Setup J key for using weapon
     this.jKey = this.input.keyboard!.addKey('J');
 
     // Setup K key for dropping weapon
@@ -433,9 +433,9 @@ export class SimpleScene extends Phaser.Scene {
       jump: jumpPressed
     });
 
-    // Handle shooting input (J key)
+    // Handle weapon use input (J key)
     if (Phaser.Input.Keyboard.JustDown(this.jKey)) {
-      this.room.send('shoot', {});
+      this.room.send('useWeapon', {});
     }
 
     // Handle drop weapon input (K key)
