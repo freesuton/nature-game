@@ -10,6 +10,7 @@ export interface Platform {
 
 export interface WeaponSpawn {
   id: string;
+  type: 'tool' | 'gun' | 'sword';
   x: number;
   y: number;
 }
@@ -36,7 +37,9 @@ export const SimpleMapConfig: MapConfig = {
   ],
 
   weaponSpawns: [
-    { id: 'center_weapon', x: 400, y: 490 } // Center of ground
+    { id: 'center_weapon', x: 400, y: 490, type: 'tool' }, // Center of ground
+    { id: 'left_weapon', x: 200, y: 490, type: 'gun' }, // Left of center
+    { id: 'right_weapon', x: 600, y: 490, type: 'sword' } // Right of center
   ]
 };
 
@@ -54,7 +57,10 @@ export const ForestMapConfig: MapConfig = {
   ],
 
   weaponSpawns: [
-    { id: 'forest_weapon', x: 400, y: 450 } // Center of ground
+    { id: 'forest_weapon', type: 'gun', x: 400, y: 450 }, // Center of ground
+    { id: 'left_weapon', type: 'sword', x: 200, y: 450 }, // Left of center
+    { id: 'right_weapon', type: 'tool', x: 600, y: 450 }, // Right of center
+    
   ]
 };
 
@@ -72,7 +78,9 @@ export const CaveMapConfig: MapConfig = {
   ],
 
   weaponSpawns: [
-    { id: 'cave_weapon', x: 400, y: 540 } // Center of ground
+    { id: 'cave_weapon', type: 'gun', x: 400, y: 540 }, // Center of ground
+    { id: 'left_weapon', type: 'tool', x: 200, y: 540 }, // Left of center
+    { id: 'right_weapon', type: 'sword', x: 600, y: 540 } // Right of center
   ]
 };
 

@@ -16,7 +16,9 @@ exports.SimpleMapConfig = {
         { x: 750, y: 220, width: 200, height: 20, type: 'platform' }
     ],
     weaponSpawns: [
-        { id: 'center_weapon', x: 400, y: 490 } // Center of ground
+        { id: 'center_weapon', x: 400, y: 490, type: 'weapon' }, // Center of ground
+        { id: 'left_weapon', x: 200, y: 490, type: 'gun' }, // Left of center
+        { id: 'right_weapon', x: 600, y: 490, type: 'sword' } // Right of center
     ]
 };
 exports.ForestMapConfig = {
@@ -32,7 +34,9 @@ exports.ForestMapConfig = {
         { x: 600, y: 150, width: 150, height: 20, type: 'platform' }
     ],
     weaponSpawns: [
-        { id: 'forest_weapon', x: 400, y: 450 } // Center of ground
+        { id: 'forest_weapon', type: 'gun', x: 400, y: 450 }, // Center of ground
+        { id: 'left_weapon', type: 'sword', x: 200, y: 450 }, // Left of center
+        { id: 'right_weapon', type: 'sword', x: 600, y: 450 } // Right of center
     ]
 };
 exports.CaveMapConfig = {
@@ -48,7 +52,9 @@ exports.CaveMapConfig = {
         { x: 300, y: 200, width: 200, height: 20, type: 'platform' }
     ],
     weaponSpawns: [
-        { id: 'cave_weapon', x: 400, y: 540 } // Center of ground
+        { id: 'cave_weapon', type: 'gun', x: 400, y: 540 }, // Center of ground
+        { id: 'left_weapon', type: 'sword', x: 200, y: 540 }, // Left of center
+        { id: 'right_weapon', type: 'sword', x: 600, y: 540 } // Right of center
     ]
 };
 // Map registry for easy access

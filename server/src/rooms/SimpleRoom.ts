@@ -283,19 +283,18 @@ export class SimpleRoom extends Room<SimpleGameState> {
     
     // Spawn weapons based on map configuration
     mapConfig.weaponSpawns.forEach((weaponSpawn: WeaponSpawn) => {
-      const weapon = new WeaponState();
+      const weapon = new WeaponState(weaponSpawn.type);
       weapon.id = weaponSpawn.id;
       weapon.x = weaponSpawn.x;
       weapon.y = weaponSpawn.y;
       weapon.isPickedUp = false;
-      weapon.weaponType = 'weapon'; // Default weapon type
 
       this.state.weapons.set(weaponSpawn.id, weapon);
       
       // Create physics body for spawned weapons with gravity disabled initially
-      this.createWeaponPhysicsBody(weapon.id, weapon, 'weapon');
+      this.createWeaponPhysicsBody(weapon.id, weapon, weapon.weaponType);
       
-      console.log(`Weapon '${weaponSpawn.id}' (${weapon.weaponType}) spawned at x=${weapon.x}, y=${weapon.y} on ${mapConfig.name}`);
+      console.log(`${weapon.weaponName} '${weaponSpawn.id}' (${weapon.weaponType}) spawned at x=${weapon.x}, y=${weapon.y} with range=${weapon.attackRange} on ${mapConfig.name}`);
     });
     
     console.log(`Total ${mapConfig.weaponSpawns.length} weapons spawned on ${mapConfig.name}`);
@@ -436,12 +435,11 @@ export class SimpleRoom extends Room<SimpleGameState> {
       
       // Create a new weapon entity at player's position
       const droppedWeaponId = `dropped_${weaponType}_${playerId}_${Date.now()}`;
-      const droppedWeapon = new WeaponState();
+      const droppedWeapon = new WeaponState(weaponType);
       droppedWeapon.id = droppedWeaponId;
       droppedWeapon.x = player.x + 16; // Center of player
       droppedWeapon.y = player.y + 35; // Slightly below player
       droppedWeapon.isPickedUp = false;
-      droppedWeapon.weaponType = weaponType;
 
       this.state.weapons.set(droppedWeaponId, droppedWeapon);
       

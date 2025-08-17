@@ -321,8 +321,8 @@ export class SimpleScene extends Phaser.Scene {
         weaponRect.setStrokeStyle(2, strokeColor);
         this.weapons.set(weaponId, weaponRect);
 
-        // Create weapon label above the weapon
-        const labelText = weapon.weaponType.toUpperCase();
+        // Create weapon label above the weapon - show weapon name if available
+        const labelText = weapon.weaponName ? weapon.weaponName.toUpperCase() : weapon.weaponType.toUpperCase();
         const labelColor = '#4169E1'; // Blue for weapons
         const weaponLabel = this.add.text(weapon.x, weapon.y - 20, labelText, {
           fontSize: '12px',
