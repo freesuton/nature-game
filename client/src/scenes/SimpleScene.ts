@@ -36,6 +36,8 @@ export class SimpleScene extends Phaser.Scene {
   private weaponLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private bullets: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private meleeAttacks: Map<string, Phaser.GameObjects.Arc> = new Map();
+  private target?: Phaser.GameObjects.Rectangle;
+  private targetHitText?: Phaser.GameObjects.Text;
   private wasdKeys!: { W: Phaser.Input.Keyboard.Key, A: Phaser.Input.Keyboard.Key, S: Phaser.Input.Keyboard.Key, D: Phaser.Input.Keyboard.Key };
   private jKey!: Phaser.Input.Keyboard.Key;
   private kKey!: Phaser.Input.Keyboard.Key;
@@ -206,6 +208,12 @@ export class SimpleScene extends Phaser.Scene {
           this.mapNameText.setText(mapDisplayName);
           this.mapNameText.setColor(mapColor);
         }
+      });
+
+      // Handle target info from server
+      this.room.onMessage('targetInfo', (data) => {
+        console.log('Received target info from server:', data);
+        this.createTarget(data);
       });
 
       // When a player is added
@@ -418,6 +426,11 @@ export class SimpleScene extends Phaser.Scene {
         this.showMeleeAttack(data);
       });
 
+      // Handle target hit effects
+      this.room.onMessage('targetHit', (data: any) => {
+        this.showTargetHit(data);
+      });
+
     } catch (error) {
       console.error('Failed to connect to server:', error);
     }
@@ -479,6 +492,16 @@ export class SimpleScene extends Phaser.Scene {
     this.bullets.clear();
     this.meleeAttacks.forEach(attack => attack.destroy());
     this.meleeAttacks.clear();
+    
+    // Clean up target
+    if (this.target) {
+      this.target.destroy();
+      this.target = undefined;
+    }
+    if (this.targetHitText) {
+      this.targetHitText.destroy();
+      this.targetHitText = undefined;
+    }
     
     // Clean up coordinate texts
     this.playerCoordTexts.forEach(coordText => coordText.destroy());
@@ -640,8 +663,8 @@ export class SimpleScene extends Phaser.Scene {
     // Add attack animation (scale up and fade out)
     this.tweens.add({
       targets: attackArc,
-      scaleX: 1.2,
-      scaleY: 1.2,
+      scaleX: 1,
+      scaleY: 1,
       alpha: 0,
       duration: 300,
       ease: 'Power2',
@@ -650,5 +673,70 @@ export class SimpleScene extends Phaser.Scene {
         this.meleeAttacks.delete(data.id);
       }
     });
+  }
+
+  private createTarget(data: any) {
+    console.log('Creating target:', data);
+    
+    // Create target visual (red rectangle)
+    this.target = this.add.rectangle(data.x, data.y, data.width, data.height, 0xFF0000);
+    this.target.setStrokeStyle(3, 0x800000); // Dark red border
+    this.target.setOrigin(0, 0); // Top-left origin
+    
+    // Create hit counter text above target
+    this.targetHitText = this.add.text(data.x + data.width/2, data.y - 20, `Hits: ${data.hits}`, {
+      fontSize: '16px',
+      color: '#FF0000',
+      backgroundColor: '#000000',
+      padding: { x: 4, y: 2 }
+    });
+    this.targetHitText.setOrigin(0.5, 0.5);
+  }
+
+  private showTargetHit(data: any) {
+    console.log('Target hit:', data);
+    
+    // Update hit counter
+    if (this.targetHitText) {
+      this.targetHitText.setText(`Hits: ${data.totalHits}`);
+    }
+    
+    // Flash target when hit
+    if (this.target) {
+      // Flash white briefly
+      this.target.setFillStyle(0xFFFFFF);
+      
+      // Return to red after brief flash
+      this.time.delayedCall(100, () => {
+        if (this.target) {
+          this.target.setFillStyle(0xFF0000);
+        }
+      });
+      
+      // Add hit effect text
+      const hitEffectText = this.add.text(
+        this.target.x + this.target.width/2, 
+        this.target.y + this.target.height/2, 
+        data.hitType === 'bullet' ? 'BULLET HIT!' : 'MELEE HIT!', 
+        {
+          fontSize: '14px',
+          color: '#FFFF00',
+          fontStyle: 'bold'
+        }
+      );
+      hitEffectText.setOrigin(0.5, 0.5);
+      
+      // Animate hit effect text
+      this.tweens.add({
+        targets: hitEffectText,
+        y: hitEffectText.y - 30,
+        alpha: 0,
+        duration: 1000,
+        ease: 'Power2',
+        onComplete: () => {
+          hitEffectText.destroy();
+        }
+      });
+    }
   }
 }

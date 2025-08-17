@@ -19,7 +19,14 @@ exports.SimpleMapConfig = {
         { id: 'center_weapon', x: 400, y: 490, type: 'tool' }, // Center of ground
         { id: 'left_weapon', x: 200, y: 490, type: 'gun' }, // Left of center
         { id: 'right_weapon', x: 600, y: 490, type: 'sword' } // Right of center
-    ]
+    ],
+    target: {
+        id: 'simple_target',
+        x: 700, // Right side, on ground level
+        y: 460, // On ground (500 - 40 height)
+        width: 40,
+        height: 40
+    }
 };
 exports.ForestMapConfig = {
     name: 'ForestMap',
@@ -34,10 +41,17 @@ exports.ForestMapConfig = {
         { x: 600, y: 150, width: 150, height: 20, type: 'platform' }
     ],
     weaponSpawns: [
-        { id: 'forest_weapon', type: 'gun', x: 400, y: 450 }, // Center of ground
-        { id: 'left_weapon', type: 'sword', x: 200, y: 450 }, // Left of center
-        { id: 'right_weapon', type: 'tool', x: 600, y: 450 }, // Right of center
-    ]
+        { id: 'forest_weapon', type: 'gun', x: 400, y: 540 }, // Center of ground
+        { id: 'left_weapon', type: 'sword', x: 200, y: 540 }, // Left of center
+        { id: 'right_weapon', type: 'tool', x: 600, y: 540 }, // Right of center
+    ],
+    target: {
+        id: 'forest_target',
+        x: 700, // Right side, on ground level
+        y: 510, // On ground (550 - 40 height)
+        width: 40,
+        height: 40
+    }
 };
 exports.CaveMapConfig = {
     name: 'CaveMap',
@@ -52,10 +66,17 @@ exports.CaveMapConfig = {
         { x: 300, y: 200, width: 200, height: 20, type: 'platform' }
     ],
     weaponSpawns: [
-        { id: 'cave_weapon', type: 'gun', x: 400, y: 540 }, // Center of ground
-        { id: 'left_weapon', type: 'tool', x: 200, y: 540 }, // Left of center
-        { id: 'right_weapon', type: 'sword', x: 600, y: 540 } // Right of center
-    ]
+        { id: 'cave_weapon', type: 'gun', x: 400, y: 570 }, // Center of ground
+        { id: 'left_weapon', type: 'tool', x: 200, y: 570 }, // Left of center
+        { id: 'right_weapon', type: 'sword', x: 600, y: 570 } // Right of center
+    ],
+    target: {
+        id: 'cave_target',
+        x: 100, // Left side, on ground level
+        y: 540, // On ground (580 - 40 height)
+        width: 40,
+        height: 40
+    }
 };
 // Map registry for easy access
 exports.Maps = {

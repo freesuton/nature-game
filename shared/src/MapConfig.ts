@@ -15,6 +15,14 @@ export interface WeaponSpawn {
   y: number;
 }
 
+export interface Target {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface MapConfig {
   name: string;
   width: number;
@@ -22,6 +30,7 @@ export interface MapConfig {
   gravity: { x: number; y: number };
   platforms: Platform[];
   weaponSpawns: WeaponSpawn[];
+  target: Target;
 }
 
 export const SimpleMapConfig: MapConfig = {
@@ -40,7 +49,15 @@ export const SimpleMapConfig: MapConfig = {
     { id: 'center_weapon', x: 400, y: 490, type: 'tool' }, // Center of ground
     { id: 'left_weapon', x: 200, y: 490, type: 'gun' }, // Left of center
     { id: 'right_weapon', x: 600, y: 490, type: 'sword' } // Right of center
-  ]
+  ],
+
+  target: {
+    id: 'simple_target',
+    x: 700, // Right side, on ground level
+    y: 460, // On ground (500 - 40 height)
+    width: 40,
+    height: 40
+  }
 };
 
 export const ForestMapConfig: MapConfig = {
@@ -57,11 +74,18 @@ export const ForestMapConfig: MapConfig = {
   ],
 
   weaponSpawns: [
-    { id: 'forest_weapon', type: 'gun', x: 400, y: 450 }, // Center of ground
-    { id: 'left_weapon', type: 'sword', x: 200, y: 450 }, // Left of center
-    { id: 'right_weapon', type: 'tool', x: 600, y: 450 }, // Right of center
-    
-  ]
+    { id: 'forest_weapon', type: 'gun', x: 400, y: 540 }, // Center of ground
+    { id: 'left_weapon', type: 'sword', x: 200, y: 540 }, // Left of center
+    { id: 'right_weapon', type: 'tool', x: 600, y: 540 }, // Right of center
+  ],
+
+  target: {
+    id: 'forest_target',
+    x: 700, // Right side, on ground level
+    y: 510, // On ground (550 - 40 height)
+    width: 40,
+    height: 40
+  }
 };
 
 export const CaveMapConfig: MapConfig = {
@@ -78,10 +102,18 @@ export const CaveMapConfig: MapConfig = {
   ],
 
   weaponSpawns: [
-    { id: 'cave_weapon', type: 'gun', x: 400, y: 540 }, // Center of ground
-    { id: 'left_weapon', type: 'tool', x: 200, y: 540 }, // Left of center
-    { id: 'right_weapon', type: 'sword', x: 600, y: 540 } // Right of center
-  ]
+    { id: 'cave_weapon', type: 'gun', x: 400, y: 570 }, // Center of ground
+    { id: 'left_weapon', type: 'tool', x: 200, y: 570 }, // Left of center
+    { id: 'right_weapon', type: 'sword', x: 600, y: 570 } // Right of center
+  ],
+
+  target: {
+    id: 'cave_target',
+    x: 100, // Left side, on ground level
+    y: 540, // On ground (580 - 40 height)
+    width: 40,
+    height: 40
+  }
 };
 
 // Map registry for easy access

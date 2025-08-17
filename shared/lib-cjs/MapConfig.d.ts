@@ -11,6 +11,13 @@ export interface WeaponSpawn {
     x: number;
     y: number;
 }
+export interface Target {
+    id: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+}
 export interface MapConfig {
     name: string;
     width: number;
@@ -21,6 +28,7 @@ export interface MapConfig {
     };
     platforms: Platform[];
     weaponSpawns: WeaponSpawn[];
+    target: Target;
 }
 export declare const SimpleMapConfig: MapConfig;
 export declare const ForestMapConfig: MapConfig;

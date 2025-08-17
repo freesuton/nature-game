@@ -21,6 +21,16 @@ export class SimpleRoom extends Room<SimpleGameState> {
   private weaponBodies: Map<string, any> = new Map();
   private currentMap: MapName = 'simple'; // Default map
   
+  // Target for weapon testing (will be loaded from map config)
+  private target = {
+    id: 'practice_target',
+    x: 600,
+    y: 480,
+    width: 40,
+    height: 40,
+    hits: 0
+  };
+  
   // Player color options
   private readonly playerColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'];
 
@@ -63,6 +73,9 @@ export class SimpleRoom extends Room<SimpleGameState> {
     
     // Spawn weapons based on map configuration
     this.spawnWeapons();
+    
+    // Initialize target based on map configuration
+    this.initializeTarget();
 
     // Server physics update at 60 FPS
     this.setSimulationInterval(() => this.updatePhysics(), 1000/60);
@@ -171,6 +184,9 @@ export class SimpleRoom extends Room<SimpleGameState> {
       mapName: this.currentMap,
       mapConfig: getMapConfig(this.currentMap)
     });
+    
+    // Send target info to the client
+    client.send('targetInfo', this.target);
     
     const player = new SimplePlayerState();
     
@@ -333,6 +349,19 @@ export class SimpleRoom extends Room<SimpleGameState> {
     // Send melee attack effect to all clients for visualization
     this.broadcast('meleeAttack', attackData);
     
+    // Check if target is hit by melee attack
+    if (this.checkMeleeTargetHit(playerCenterX, playerCenterY, weaponTemplate.attackRange, player.facingDirection)) {
+      this.target.hits++;
+      console.log(`Player ${playerId} hit target with melee attack! Total hits: ${this.target.hits}`);
+      
+      // Broadcast target hit to all clients
+      this.broadcast('targetHit', {
+        playerId: playerId,
+        totalHits: this.target.hits,
+        hitType: 'melee'
+      });
+    }
+    
     // Check for targets within the swing area (semicircle)
     this.state.players.forEach((targetPlayer, targetId) => {
       if (targetId === playerId || targetPlayer.isDead) return; // Skip self and dead players
@@ -377,12 +406,106 @@ export class SimpleRoom extends Room<SimpleGameState> {
       bullet.x += bullet.velocityX * (16.666 / 1000); // Move based on frame time
       bullet.y += bullet.velocityY * (16.666 / 1000);
       
+      // Check collision with target
+      if (this.checkBulletTargetCollision(bullet)) {
+        this.target.hits++;
+        this.state.bullets.delete(bulletId);
+        console.log(`Bullet '${bulletId}' hit target! Total hits: ${this.target.hits}`);
+        
+        // Broadcast target hit to all clients
+        this.broadcast('targetHit', {
+          bulletId: bulletId,
+          totalHits: this.target.hits,
+          hitType: 'bullet'
+        });
+        return;
+      }
+      
       // Remove bullet if it goes off screen
       if (bullet.x < -50 || bullet.x > 850 || bullet.y < -50 || bullet.y > 650) {
         this.state.bullets.delete(bulletId);
         console.log(`Bullet '${bulletId}' went off screen and was removed`);
       }
     });
+  }
+
+  private checkBulletTargetCollision(bullet: any): boolean {
+    // Check if bullet overlaps with target
+    const bulletLeft = bullet.x - 4; // Bullet width/2
+    const bulletRight = bullet.x + 4;
+    const bulletTop = bullet.y - 2; // Bullet height/2
+    const bulletBottom = bullet.y + 2;
+    
+    const targetLeft = this.target.x;
+    const targetRight = this.target.x + this.target.width;
+    const targetTop = this.target.y;
+    const targetBottom = this.target.y + this.target.height;
+    
+    return bulletLeft < targetRight && 
+           bulletRight > targetLeft && 
+           bulletTop < targetBottom && 
+           bulletBottom > targetTop;
+  }
+
+  private checkMeleeTargetHit(playerCenterX: number, playerCenterY: number, range: number, direction: string): boolean {
+    
+    if(range === undefined) {
+      return false;
+    }
+    
+    // Check if semicircle intersects with target rectangle
+    // We'll check multiple points on the target rectangle edges
+    
+    const targetLeft = this.target.x;
+    const targetRight = this.target.x + this.target.width;
+    const targetTop = this.target.y;
+    const targetBottom = this.target.y + this.target.height;
+    
+    // Check target corners and edge points
+    const checkPoints = [
+      // Corners
+      { x: targetLeft, y: targetTop },
+      { x: targetRight, y: targetTop },
+      { x: targetLeft, y: targetBottom },
+      { x: targetRight, y: targetBottom },
+      // Center
+      { x: targetLeft + this.target.width / 2, y: targetTop + this.target.height / 2 },
+      // Edge midpoints
+      { x: targetLeft + this.target.width / 2, y: targetTop },
+      { x: targetLeft + this.target.width / 2, y: targetBottom },
+      { x: targetLeft, y: targetTop + this.target.height / 2 },
+      { x: targetRight, y: targetTop + this.target.height / 2 }
+    ];
+    
+    // Check if any point of the target is within the semicircle
+    for (const point of checkPoints) {
+      const distance = Math.sqrt(
+        Math.pow(point.x - playerCenterX, 2) + 
+        Math.pow(point.y - playerCenterY, 2)
+      );
+      
+      // Check if point is within range
+      if (distance <= range) {
+        // Calculate angle to point
+        const angleToPoint = Math.atan2(point.y - playerCenterY, point.x - playerCenterX);
+        
+        // Check if point is in the semicircle facing direction
+        let inAttackArea = false;
+        if (direction === 'right') {
+          // Right facing: -90° to +90° (right semicircle)
+          inAttackArea = angleToPoint >= -Math.PI/2 && angleToPoint <= Math.PI/2;
+        } else {
+          // Left facing: 90° to 270° (left semicircle)
+          inAttackArea = angleToPoint >= Math.PI/2 || angleToPoint <= -Math.PI/2;
+        }
+        
+        if (inAttackArea) {
+          return true; // Hit detected
+        }
+      }
+    }
+    
+    return false;
   }
 
   private getUniquePlayerColor(): string {
@@ -436,6 +559,21 @@ export class SimpleRoom extends Room<SimpleGameState> {
     });
     
     console.log(`Total ${mapConfig.weaponSpawns.length} weapons spawned on ${mapConfig.name}`);
+  }
+
+  private initializeTarget() {
+    const mapConfig = getMapConfig(this.currentMap);
+    console.log(`Initializing target for map: ${mapConfig.name}`);
+    
+    // Update target position and properties from map config
+    this.target.id = mapConfig.target.id;
+    this.target.x = mapConfig.target.x;
+    this.target.y = mapConfig.target.y;
+    this.target.width = mapConfig.target.width;
+    this.target.height = mapConfig.target.height;
+    this.target.hits = 0; // Reset hit counter for new map
+    
+    console.log(`Target '${this.target.id}' positioned at x=${this.target.x}, y=${this.target.y} (${this.target.width}x${this.target.height}) on ${mapConfig.name}`);
   }
 
 
