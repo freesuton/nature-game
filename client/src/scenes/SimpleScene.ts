@@ -314,16 +314,16 @@ export class SimpleScene extends Phaser.Scene {
       this.room.state.weapons.onAdd((weapon: any, weaponId: string) => {
         console.log('Weapon added:', weaponId, 'at', weapon.x, weapon.y, 'type:', weapon.weaponType);
         
-        // Create visual weapon (color based on type)
-        const weaponColor = 0xC0C0C0; // Silver for weapons
-        const strokeColor = 0x4169E1; // Blue for weapons
+        // Create visual weapon using colors from server weapon state
+        const weaponColor = weapon.weaponColor || 0xC0C0C0; // Use server color or default to silver
+        const strokeColor = weapon.strokeColor || 0x4169E1; // Use server color or default to blue
         const weaponRect = this.add.rectangle(weapon.x, weapon.y, 24, 6, weaponColor)
         weaponRect.setStrokeStyle(2, strokeColor);
         this.weapons.set(weaponId, weaponRect);
 
         // Create weapon label above the weapon - show weapon name if available
         const labelText = weapon.weaponName ? weapon.weaponName.toUpperCase() : weapon.weaponType.toUpperCase();
-        const labelColor = '#4169E1'; // Blue for weapons
+        const labelColor = weapon.labelColor || '#4169E1'; // Use server color or default to blue
         const weaponLabel = this.add.text(weapon.x, weapon.y - 20, labelText, {
           fontSize: '12px',
           color: labelColor,

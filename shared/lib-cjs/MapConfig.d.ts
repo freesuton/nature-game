@@ -7,7 +7,7 @@ export interface Platform {
 }
 export interface WeaponSpawn {
     id: string;
-    type: 'weapon' | 'gun' | 'sword';
+    type: 'tool' | 'gun' | 'sword';
     x: number;
     y: number;
 }
