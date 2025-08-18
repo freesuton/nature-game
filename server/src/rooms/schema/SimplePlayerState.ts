@@ -10,4 +10,5 @@ export class SimplePlayerState extends Schema {
   @type("boolean") hasWeapon: boolean = false; // Track if player has a weapon
   @type("string") weaponType: string = ""; // Track the type of weapon the player has
   @type("boolean") isDead: boolean = false; // Track if player is dead
+  @type("number") hitCount: number = 0; // Track how many times player has been hit
 }

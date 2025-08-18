@@ -13,6 +13,7 @@ interface SimplePlayer {
   hasWeapon: boolean;
   weaponType: string;
   isDead: boolean;
+  hitCount: number;
 }
 
 
@@ -32,6 +33,7 @@ export class SimpleScene extends Phaser.Scene {
   private room!: Colyseus.Room;
   private players: Map<string, SimplePlayerConfig> = new Map();
   private playerCoordTexts: Map<string, Phaser.GameObjects.Text> = new Map();
+  private playerHitTexts: Map<string, Phaser.GameObjects.Text> = new Map();
   private weapons: Map<string, Phaser.GameObjects.Rectangle> = new Map();
   private weaponLabels: Map<string, Phaser.GameObjects.Text> = new Map();
   private bullets: Map<string, Phaser.GameObjects.Rectangle> = new Map();
@@ -237,8 +239,17 @@ export class SimpleScene extends Phaser.Scene {
           strokeThickness: 1
         }).setOrigin(0.5, 1); // Center horizontally, bottom align
         
+        // Create hit counter text above player
+        const hitText = this.add.text(player.x + 16, player.y - 35, `Hits: ${player.hitCount || 0}`, {
+          fontSize: '10px',
+          color: '#FF6666',
+          backgroundColor: '#000000',
+          padding: { x: 3, y: 1 }
+        }).setOrigin(0.5, 1); // Center horizontally, bottom align
+        
         this.players.set(sessionId, simplePlayer);
         this.playerCoordTexts.set(sessionId, coordText);
+        this.playerHitTexts.set(sessionId, hitText);
         
         // Initialize center coordinates display for current player
         if (isMyPlayer && this.centerCoordsText) {
@@ -254,6 +265,7 @@ export class SimpleScene extends Phaser.Scene {
           // Get SimplePlayerConfig instance
           const simplePlayer = this.players.get(sessionId);
           const coordText = this.playerCoordTexts.get(sessionId);
+          const hitText = this.playerHitTexts.get(sessionId);
           if (!simplePlayer) return;
           
           // Update position, movement, and facing direction
@@ -261,10 +273,25 @@ export class SimpleScene extends Phaser.Scene {
           simplePlayer.updateMovement(player.movingLeft, player.movingRight);
           simplePlayer.updateFacingDirection(player.facingDirection);
           
+          // Update death state visual
+          if (player.isDead) {
+            simplePlayer.sprite.setAlpha(0.5);
+            simplePlayer.sprite.setTint(0x808080); // Gray tint for dead players
+          } else {
+            simplePlayer.sprite.setAlpha(1.0);
+            simplePlayer.sprite.clearTint(); // Remove tint for alive players
+          }
+          
           // Update coordinate text position and content
           if (coordText) {
             coordText.setPosition(player.x + 16, player.y - 25);
             coordText.setText(`(${Math.round(player.x)}, ${Math.round(player.y)})`);
+          }
+          
+          // Update hit counter text position and content
+          if (hitText) {
+            hitText.setPosition(player.x + 16, player.y - 35);
+            hitText.setText(`Hits: ${player.hitCount || 0}`);
           }
           
           // Update center coordinates display for current player
@@ -312,6 +339,13 @@ export class SimpleScene extends Phaser.Scene {
         if (coordText) {
           coordText.destroy();
           this.playerCoordTexts.delete(sessionId);
+        }
+        
+        // Destroy hit counter text
+        const hitText = this.playerHitTexts.get(sessionId);
+        if (hitText) {
+          hitText.destroy();
+          this.playerHitTexts.delete(sessionId);
         }
         
         this.updatePlayerCount();
@@ -431,6 +465,16 @@ export class SimpleScene extends Phaser.Scene {
         this.showTargetHit(data);
       });
 
+      // Handle player death effects
+      this.room.onMessage('playerDeath', (data: any) => {
+        this.showPlayerDeath(data);
+      });
+
+      // Handle player hit effects
+      this.room.onMessage('playerHit', (data: any) => {
+        this.showPlayerHit(data);
+      });
+
     } catch (error) {
       console.error('Failed to connect to server:', error);
     }
@@ -506,6 +550,10 @@ export class SimpleScene extends Phaser.Scene {
     // Clean up coordinate texts
     this.playerCoordTexts.forEach(coordText => coordText.destroy());
     this.playerCoordTexts.clear();
+    
+    // Clean up hit counter texts
+    this.playerHitTexts.forEach(hitText => hitText.destroy());
+    this.playerHitTexts.clear();
   }
 
   private createMapFromServerInfo(mapConfig: any) {
@@ -736,6 +784,106 @@ export class SimpleScene extends Phaser.Scene {
         ease: 'Power2',
         onComplete: () => {
           hitEffectText.destroy();
+        }
+      });
+    }
+  }
+
+  private showPlayerDeath(data: any) {
+    console.log('Player death:', data);
+    
+    // Find the killed player
+    const killedPlayer = this.players.get(data.killedPlayerId);
+    if (killedPlayer) {
+      // Change player visual to indicate death (gray out)
+      killedPlayer.sprite.setAlpha(0.5);
+      killedPlayer.sprite.setTint(0x808080); // Gray tint
+      
+      // Add death effect text
+      const deathText = this.add.text(
+        killedPlayer.sprite.x + 16, 
+        killedPlayer.sprite.y - 10, 
+        'KILLED!', 
+        {
+          fontSize: '14px',
+          color: '#FF0000',
+          fontStyle: 'bold'
+        }
+      );
+      deathText.setOrigin(0.5, 0.5);
+      
+      // Animate death text
+      this.tweens.add({
+        targets: deathText,
+        y: deathText.y - 40,
+        alpha: 0,
+        duration: 2000,
+        ease: 'Power2',
+        onComplete: () => {
+          deathText.destroy();
+        }
+      });
+      
+      // Show kill notification in center
+      const killNotification = this.add.text(
+        400, 
+        200, 
+        `${data.killerPlayerId} killed ${data.killedPlayerId} with ${data.weaponType}!`, 
+        {
+          fontSize: '18px',
+          color: '#FFFF00',
+          backgroundColor: '#000000',
+          padding: { x: 10, y: 5 }
+        }
+      );
+      killNotification.setOrigin(0.5, 0.5).setScrollFactor(0).setDepth(2000);
+      
+      // Remove notification after 3 seconds
+      this.time.delayedCall(3000, () => {
+        killNotification.destroy();
+      });
+    }
+  }
+
+  private showPlayerHit(data: any) {
+    console.log('Player hit:', data);
+    
+    // Find the hit player
+    const hitPlayer = this.players.get(data.hitPlayerId);
+    if (hitPlayer) {
+      // Add hit effect text
+      const hitEffectText = this.add.text(
+        hitPlayer.sprite.x + 16, 
+        hitPlayer.sprite.y + 10, 
+        `+1 HIT!`, 
+        {
+          fontSize: '12px',
+          color: '#FF6666',
+          fontStyle: 'bold'
+        }
+      );
+      hitEffectText.setOrigin(0.5, 0.5);
+      
+      // Animate hit effect text
+      this.tweens.add({
+        targets: hitEffectText,
+        y: hitEffectText.y - 25,
+        alpha: 0,
+        duration: 1000,
+        ease: 'Power2',
+        onComplete: () => {
+          hitEffectText.destroy();
+        }
+      });
+      
+      // Flash player briefly when hit
+      const originalTint = hitPlayer.sprite.tintTopLeft;
+      hitPlayer.sprite.setTint(0xFF6666); // Red flash
+      
+      // Return to original color after brief flash
+      this.time.delayedCall(150, () => {
+        if (hitPlayer.sprite.active) {
+          hitPlayer.sprite.setTint(originalTint);
         }
       });
     }

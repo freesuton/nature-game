@@ -9,7 +9,7 @@ import { SimpleMapConfig, Platform, getMapConfig, MapName, Maps, getRandomMapNam
 export class SimpleRoom extends Room<SimpleGameState> {
   maxClients = 4;
 
-  private readonly MOVE_SPEED = 150; // pixels per second
+  private readonly MOVE_SPEED = 100; // pixels per second
   private readonly JUMP_SPEED = 400; // pixels per second
   private readonly PLAYER_WIDTH = 32;
   private readonly PLAYER_HEIGHT = 48;
@@ -358,7 +358,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
     this.broadcast('meleeAttack', attackData);
     
     // Check if target is hit by melee attack
-    if (this.checkMeleeTargetHit(playerCenterX, playerCenterY, weaponTemplate.attackRange, player.facingDirection)) {
+    if (this.checkMeleeHit(playerCenterX, playerCenterY, weaponTemplate.attackRange, player.facingDirection, this.target)) {
       this.target.hits++;
       console.log(`Player ${playerId} hit target with melee attack! Total hits: ${this.target.hits}`);
       
@@ -370,38 +370,24 @@ export class SimpleRoom extends Room<SimpleGameState> {
       });
     }
     
-    // Check for targets within the swing area (semicircle)
+    // Check for players within the swing area (semicircle)
     this.state.players.forEach((targetPlayer, targetId) => {
       if (targetId === playerId || targetPlayer.isDead) return; // Skip self and dead players
       
-      const targetCenterX = targetPlayer.x + (this.PLAYER_WIDTH / 2);
-      const targetCenterY = targetPlayer.y + (this.PLAYER_HEIGHT / 2);
-      
-      // Calculate distance
-      const distance = Math.sqrt(
-        Math.pow(targetCenterX - playerCenterX, 2) + 
-        Math.pow(targetCenterY - playerCenterY, 2)
-      );
-      
-      // Check if target is within range
-      if (distance <= weaponTemplate.attackRange) {
-        // Calculate angle to target
-        const angleToTarget = Math.atan2(targetCenterY - playerCenterY, targetCenterX - playerCenterX);
+      // Use the same collision detection logic as target hit detection
+      if (this.checkMeleeHit(playerCenterX, playerCenterY, weaponTemplate.attackRange, player.facingDirection, targetPlayer)) {
+        // Player is hit by melee attack - increment hit count
+        targetPlayer.hitCount++;
         
-        // Check if target is in the semicircle facing direction
-        let inAttackArea = false;
-        if (player.facingDirection === 'right') {
-          // Right facing: -90° to +90° (right semicircle)
-          inAttackArea = angleToTarget >= -Math.PI/2 && angleToTarget <= Math.PI/2;
-        } else {
-          // Left facing: 90° to 270° (left semicircle)
-          inAttackArea = angleToTarget >= Math.PI/2 || angleToTarget <= -Math.PI/2;
-        }
+        console.log(`Player ${targetId} was hit by melee attack from ${playerId}! Hit count: ${targetPlayer.hitCount}`);
         
-        if (inAttackArea) {
-          console.log(`Player ${playerId} hit player ${targetId} with melee attack!`);
-          // Here you could add damage logic later
-        }
+        // Broadcast player hit to all clients
+        this.broadcast('playerHit', {
+          hitPlayerId: targetId,
+          attackerPlayerId: playerId,
+          weaponType: 'melee',
+          hitCount: targetPlayer.hitCount
+        });
       }
     });
     
@@ -413,6 +399,34 @@ export class SimpleRoom extends Room<SimpleGameState> {
       // Move bullet based on velocity
       bullet.x += bullet.velocityX * (16.666 / 1000); // Move based on frame time
       bullet.y += bullet.velocityY * (16.666 / 1000);
+      
+      // Check collision with players
+      let bulletHitPlayer = false;
+      this.state.players.forEach((player, playerId) => {
+        // Skip bullet owner and dead players
+        if (playerId === bullet.ownerId || player.isDead) return;
+        
+        if (this.checkBulletPlayerCollision(bullet, player)) {
+          // Player is hit by bullet - increment hit count
+          player.hitCount++;
+          this.state.bullets.delete(bulletId);
+          bulletHitPlayer = true;
+          
+          console.log(`Player ${playerId} was hit by bullet from ${bullet.ownerId}! Hit count: ${player.hitCount}`);
+          
+          // Broadcast player hit to all clients
+          this.broadcast('playerHit', {
+            hitPlayerId: playerId,
+            attackerPlayerId: bullet.ownerId,
+            weaponType: 'bullet',
+            hitCount: player.hitCount
+          });
+          
+          return; // Exit early since bullet hit someone
+        }
+      });
+      
+      if (bulletHitPlayer) return; // Skip other checks if bullet hit a player
       
       // Check collision with target
       if (this.checkBulletTargetCollision(bullet)) {
@@ -437,6 +451,24 @@ export class SimpleRoom extends Room<SimpleGameState> {
     });
   }
 
+  private checkBulletPlayerCollision(bullet: any, player: any): boolean {
+    // Check if bullet overlaps with player
+    const bulletLeft = bullet.x - 4; // Bullet width/2
+    const bulletRight = bullet.x + 4;
+    const bulletTop = bullet.y - 2; // Bullet height/2
+    const bulletBottom = bullet.y + 2;
+    
+    const playerLeft = player.x;
+    const playerRight = player.x + this.PLAYER_WIDTH;
+    const playerTop = player.y;
+    const playerBottom = player.y + this.PLAYER_HEIGHT;
+    
+    return bulletLeft < playerRight && 
+           bulletRight > playerLeft && 
+           bulletTop < playerBottom && 
+           bulletBottom > playerTop;
+  }
+
   private checkBulletTargetCollision(bullet: any): boolean {
     // Check if bullet overlaps with target
     const bulletLeft = bullet.x - 4; // Bullet width/2
@@ -455,47 +487,56 @@ export class SimpleRoom extends Room<SimpleGameState> {
            bulletBottom > targetTop;
   }
 
-  private checkMeleeTargetHit(playerCenterX: number, playerCenterY: number, range: number, direction: string): boolean {
+  private checkSemicircleRectangleCollision(
+    semicircleX: number, 
+    semicircleY: number, 
+    range: number, 
+    direction: string, 
+    rectX: number, 
+    rectY: number, 
+    rectWidth: number, 
+    rectHeight: number
+  ): boolean {
     
     if(range === undefined) {
       return false;
     }
     
-    // Check if semicircle intersects with target rectangle
-    // We'll check multiple points on the target rectangle edges
+    // Check if semicircle intersects with rectangle
+    // We'll check multiple points on the rectangle edges
     
-    const targetLeft = this.target.x;
-    const targetRight = this.target.x + this.target.width;
-    const targetTop = this.target.y;
-    const targetBottom = this.target.y + this.target.height;
+    const rectLeft = rectX;
+    const rectRight = rectX + rectWidth;
+    const rectTop = rectY;
+    const rectBottom = rectY + rectHeight;
     
-    // Check target corners and edge points
+    // Check rectangle corners and edge points
     const checkPoints = [
       // Corners
-      { x: targetLeft, y: targetTop },
-      { x: targetRight, y: targetTop },
-      { x: targetLeft, y: targetBottom },
-      { x: targetRight, y: targetBottom },
+      { x: rectLeft, y: rectTop },
+      { x: rectRight, y: rectTop },
+      { x: rectLeft, y: rectBottom },
+      { x: rectRight, y: rectBottom },
       // Center
-      { x: targetLeft + this.target.width / 2, y: targetTop + this.target.height / 2 },
+      { x: rectLeft + rectWidth / 2, y: rectTop + rectHeight / 2 },
       // Edge midpoints
-      { x: targetLeft + this.target.width / 2, y: targetTop },
-      { x: targetLeft + this.target.width / 2, y: targetBottom },
-      { x: targetLeft, y: targetTop + this.target.height / 2 },
-      { x: targetRight, y: targetTop + this.target.height / 2 }
+      { x: rectLeft + rectWidth / 2, y: rectTop },
+      { x: rectLeft + rectWidth / 2, y: rectBottom },
+      { x: rectLeft, y: rectTop + rectHeight / 2 },
+      { x: rectRight, y: rectTop + rectHeight / 2 }
     ];
     
-    // Check if any point of the target is within the semicircle
+    // Check if any point of the rectangle is within the semicircle
     for (const point of checkPoints) {
       const distance = Math.sqrt(
-        Math.pow(point.x - playerCenterX, 2) + 
-        Math.pow(point.y - playerCenterY, 2)
+        Math.pow(point.x - semicircleX, 2) + 
+        Math.pow(point.y - semicircleY, 2)
       );
       
       // Check if point is within range
       if (distance <= range) {
         // Calculate angle to point
-        const angleToPoint = Math.atan2(point.y - playerCenterY, point.x - playerCenterX);
+        const angleToPoint = Math.atan2(point.y - semicircleY, point.x - semicircleX);
         
         // Check if point is in the semicircle facing direction
         let inAttackArea = false;
@@ -514,6 +555,36 @@ export class SimpleRoom extends Room<SimpleGameState> {
     }
     
     return false;
+  }
+
+  private checkMeleeHit(playerCenterX: number, playerCenterY: number, range: number, direction: string, target: any): boolean {
+    // Determine target dimensions based on object type
+    let targetX, targetY, targetWidth, targetHeight;
+    
+    if (target === this.target) {
+      // Practice target object
+      targetX = target.x;
+      targetY = target.y;
+      targetWidth = target.width;
+      targetHeight = target.height;
+    } else {
+      // Player object
+      targetX = target.x;
+      targetY = target.y;
+      targetWidth = this.PLAYER_WIDTH;
+      targetHeight = this.PLAYER_HEIGHT;
+    }
+    
+    return this.checkSemicircleRectangleCollision(
+      playerCenterX, 
+      playerCenterY, 
+      range, 
+      direction, 
+      targetX, 
+      targetY, 
+      targetWidth, 
+      targetHeight
+    );
   }
 
   private getUniquePlayerColor(): string {
