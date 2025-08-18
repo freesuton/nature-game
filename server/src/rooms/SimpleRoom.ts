@@ -59,7 +59,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
       gravity: mapConfig.gravity
     });
 
-    // Create platforms from selected map config
+    // Create platforms from selected map config. Anchor point is top left.
     mapConfig.platforms.forEach((platformConfig: Platform) => {
       this.platforms.push(
         this.physics.add.staticBody(
@@ -123,11 +123,11 @@ export class SimpleRoom extends Room<SimpleGameState> {
       }
     });
 
-    // Handle J key action (pickup weapon)
-    this.onMessage("useWeapon", (client, data) => {
+    // Handle J key action (pickup/drop weapon)
+    this.onMessage("pickupDropWeapon", (client, data) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || player.isDead) {
-        console.log(`Cannot perform action: player ${client.sessionId} is dead or doesn't exist`);
+        console.log(`Cannot perform pickup/drop: player ${client.sessionId} is dead or doesn't exist`);
         return;
       }
 
@@ -136,10 +136,27 @@ export class SimpleRoom extends Room<SimpleGameState> {
         const weaponPickedUp = this.tryPickupWeapon(client.sessionId);
         if (weaponPickedUp) {
           console.log(`Player ${client.sessionId} picked up a weapon with J key`);
-          return;
+        } else {
+          console.log(`Player ${client.sessionId} tried to pick up weapon but none in range`);
         }
-        
-        console.log(`Player ${client.sessionId} tried to pick up weapon but none in range`);
+      } else {
+        // Player has a weapon, drop it
+        this.dropPlayerWeapon(client.sessionId);
+        console.log(`Player ${client.sessionId} dropped weapon with J key`);
+      }
+    });
+
+    // Handle K key action (use weapon)
+    this.onMessage("useWeapon", (client, data) => {
+      const player = this.state.players.get(client.sessionId);
+      if (!player || player.isDead) {
+        console.log(`Cannot use weapon: player ${client.sessionId} is dead or doesn't exist`);
+        return;
+      }
+
+      // Player must have a weapon to use it
+      if (!player.hasWeapon) {
+        console.log(`Player ${client.sessionId} tried to use weapon but has none`);
         return;
       }
 
@@ -158,16 +175,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
       }
     });
 
-    // Handle dropping weapon
-    this.onMessage("dropWeapon", (client, data) => {
-      const player = this.state.players.get(client.sessionId);
-      if (!player || !player.hasWeapon || player.isDead) {
-        console.log(`Cannot drop weapon: player ${client.sessionId} - hasWeapon: ${player?.hasWeapon}, isDead: ${player?.isDead}`);
-        return;
-      }
 
-      this.dropPlayerWeapon(client.sessionId);
-    });
 
     // Handle ping requests for latency measurement
     this.onMessage("ping", (client, data) => {
@@ -193,7 +201,7 @@ export class SimpleRoom extends Room<SimpleGameState> {
     // Assign a unique color to the new player
     const assignedColor = this.getUniquePlayerColor();
     
-    // Create physics body for player at initial spawn position
+    // Create physics body for player at initial spawn position. Anchor point is top left.
     const playerBody = this.physics.add.body(500, 400, 32, 48);
     this.playerBodies.set(client.sessionId, playerBody);
 

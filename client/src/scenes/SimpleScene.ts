@@ -159,10 +159,10 @@ export class SimpleScene extends Phaser.Scene {
     // Setup WASD input
     this.wasdKeys = this.input.keyboard!.addKeys('W,S,A,D') as any;
 
-    // Setup J key for using weapon
+    // Setup J key for pickup/drop weapon
     this.jKey = this.input.keyboard!.addKey('J');
 
-    // Setup K key for dropping weapon
+    // Setup K key for using weapon
     this.kKey = this.input.keyboard!.addKey('K');
 
     // Menu key
@@ -452,14 +452,14 @@ export class SimpleScene extends Phaser.Scene {
       jump: jumpPressed
     });
 
-    // Handle weapon use input (J key)
+    // Handle pickup/drop weapon input (J key)
     if (Phaser.Input.Keyboard.JustDown(this.jKey)) {
-      this.room.send('useWeapon', {});
+      this.room.send('pickupDropWeapon', {});
     }
 
-    // Handle drop weapon input (K key)
+    // Handle weapon use input (K key)
     if (Phaser.Input.Keyboard.JustDown(this.kKey)) {
-      this.room.send('dropWeapon', {});
+      this.room.send('useWeapon', {});
     }
   }
 
@@ -529,6 +529,7 @@ export class SimpleScene extends Phaser.Scene {
       
       // Add visual representation for each platform with map-specific colors
       const color = this.getMapPlatformColor(this.currentMap, platformConfig.type);
+      // Anchor point is top left.
       const visual = this.add.rectangle(
         platformConfig.x, 
         platformConfig.y, 
